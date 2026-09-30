@@ -1,0 +1,4 @@
+{% extends "base.html" %}
+{% macro error_content() %}<section class="error-state"><span class="error-code">{{ error.status }}</span><h1>{{ error.message }}</h1><a class="button secondary" href="{{ '/cards' if user else '/auth/login' }}"><i data-lucide="arrow-left"></i>Orqaga</a></section>{% endmacro %}
+{% block public_content %}{{ error_content() }}{% endblock %}
+{% block workspace_content %}{{ error_content() }}{% endblock %}

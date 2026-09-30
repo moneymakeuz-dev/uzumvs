@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block workspace_content %}
+<div class="page-heading card-heading">
+  <div class="heading-copy">
+    <div class="eyebrow"><a href="/cards">KARTOCHKALAR</a><span aria-hidden="true">/</span><span id="card-version">v{{ card.version }}</span></div>
+    <h1 id="card-heading">{{ title }}</h1>
+  </div>
+  <div class="heading-actions">
+    {% if card.status == 'ready' %}
+    <button type="button" class="button secondary" data-action="export" data-format="xlsx" data-lock><i data-lucide="file-spreadsheet"></i>XLSX</button>
+    <button type="button" class="button secondary" data-action="export" data-format="csv" data-lock><i data-lucide="download"></i>CSV</button>
+    {% endif %}
+    <button type="button" class="icon-button" data-action="delete-card" data-lock title="Kartochkani o'chirish" aria-label="Kartochkani o'chirish"><i data-lucide="trash-2"></i></button>
+  </div>
+</div>
+{% include "partials/job_status.html" %}
+<section id="conflict" class="conflict-panel" hidden aria-live="assertive"></section>
+<div class="editor-grid">
+  <aside class="image-panel" aria-label="Mahsulot rasmlari">
+    <div class="main-image">{% if card.images %}<img id="main-image" src="{{ card.images[0].url }}" alt="1-mahsulot rasmi">{% endif %}</div>
+    {% if card.images|length > 1 %}
+    <div class="thumbnails">{% for image in card.images %}<button type="button" class="thumbnail {{ 'active' if loop.first else '' }}" data-image="{{ image.url }}" data-index="{{ loop.index }}" aria-label="{{ loop.index }}-rasmni ko'rish" aria-pressed="{{ 'true' if loop.first else 'false' }}"><img src="{{ image.url }}" alt="" loading="lazy"></button>{% endfor %}</div>
+    {% endif %}
+    <div class="notes-block"><label for="seller-notes-edit">Sotuvchi izohi</label><textarea id="seller-notes-edit" maxlength="2000" rows="5" placeholder="Brend, model, material va boshqa tasdiqlangan faktlar">{{ card.seller_notes }}</textarea><small>AI shu faktlarga tayanadi. O'zgarish keyingi yaratishda ishlatiladi.</small></div>
+  </aside>
+  <section id="editor" class="editor" aria-label="Kartochka matni"></section>
+</div>
+<div class="save-bar" id="save-bar">
+  <span id="save-state" class="save-state" aria-live="polite">Saqlangan</span>
+  {% if card.status == 'ready' %}
+  <button type="button" class="button secondary" data-action="copy-all" data-lock><i data-lucide="copy"></i><span><span class="hide-small">Hammasini </span>nusxalash</span></button>
+  <button type="button" class="button secondary" data-action="regenerate-all" data-lock><i data-lucide="refresh-cw"></i><span><span class="hide-small">Qayta </span>yaratish</span></button>
+  {% endif %}
+  <button type="button" class="button primary" data-action="save" data-lock disabled><i data-lucide="check"></i>Saqlash</button>
+</div>
+<script type="application/json" id="card-data">{{ card|tojson }}</script>
+{% endblock %}

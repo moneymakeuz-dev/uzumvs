@@ -1,0 +1,20 @@
+name: karto-local
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: karto
+      POSTGRES_DB: karto
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run scripts/setup_local.py first}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-55432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U karto -d karto"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+volumes:
+  postgres_data:

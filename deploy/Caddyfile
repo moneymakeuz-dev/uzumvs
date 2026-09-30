@@ -1,0 +1,17 @@
+{$DOMAIN} {
+	encode zstd gzip
+	request_body {
+		max_size 53MB
+	}
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000"
+	}
+	@static path /static/*
+	header @static Cache-Control "public, max-age=3600"
+	reverse_proxy web:8000 {
+		transport http {
+			read_timeout 90s
+		}
+	}
+}

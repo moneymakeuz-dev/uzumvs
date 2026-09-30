@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="uz">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf }}">
+  <meta name="htmx-config" content='{"allowEval":false,"includeIndicatorStyles":false,"selfRequestsOnly":true}'>
+  <title>{{ title|default('Karto Studio') }} | Karto</title>
+  <link rel="stylesheet" href="/static/dist/app.css">
+  <script src="/static/dist/app.js" defer></script>
+</head>
+<body data-ai-provider="{{ settings.ai_provider }}">
+  <a class="skip-link" href="#main">Asosiy qismga o'tish</a>
+  {% if user and not auth_page|default(false) %}
+  <div class="workspace">
+    <aside class="sidebar" id="navigation">
+      <a class="brand" href="/cards/new"><span class="brand-mark" aria-hidden="true"><i data-lucide="layers-2"></i></span>Karto<span class="brand-label">STUDIO</span></a>
+      <div class="nav-label">ISH MAYDONI</div>
+      <nav aria-label="Asosiy navigatsiya">
+        <a class="nav-item {{ 'active' if active_page == 'new' else '' }}" href="/cards/new"><i data-lucide="square-plus"></i>Yangi kartochka</a>
+        <a class="nav-item {{ 'active' if active_page == 'history' else '' }}" href="/cards"><i data-lucide="layout-grid"></i>Kartochkalar</a>
+        <a class="nav-item {{ 'active' if active_page == 'profile' else '' }}" href="/profile"><i data-lucide="settings-2"></i>Profil va limitlar</a>
+      </nav>
+      <div class="sidebar-bottom">
+        {% if usage %}<div class="quota-widget"><div class="quota-title">Oylik kartochkalar <i data-lucide="sparkles"></i></div><strong data-usage-initial>{{ usage.initial.available }}</strong><span> / {{ usage.initial.limit }} ta qoldi</span><progress data-usage-progress max="{{ usage.initial.limit }}" value="{{ usage.initial.available }}"></progress><a href="/profile">Limitlar <i data-lucide="arrow-up-right"></i></a></div>{% endif %}
+        <div class="user-chip"><span class="avatar">{{ user.email_normalized[0]|upper }}</span><span class="user-email">{{ user.email_normalized }}</span><form method="post" action="/auth/logout"><input type="hidden" name="csrf_token" value="{{ csrf }}"><button class="icon-button" title="Chiqish" aria-label="Chiqish"><i data-lucide="log-out"></i></button></form></div>
+      </div>
+    </aside>
+    <div class="workspace-body">
+      <header class="topbar"><button class="icon-button mobile-menu" type="button" data-action="menu" aria-label="Navigatsiyani ochish" aria-controls="navigation" aria-expanded="false"><i data-lucide="menu"></i></button><span class="breadcrumb">Ish maydoni <i data-lucide="chevron-right"></i> {{ page_name|default('Kartochkalar') }}</span><span class="workspace-tag"><span class="status-dot"></span>Shaxsiy hisob</span></header>
+      <main id="main" class="main-content">{% block workspace_content %}{% endblock %}</main>
+      <footer class="app-footer"><span>Karto Studio</span><a href="/privacy">Maxfiylik</a></footer>
+    </div>
+  </div>
+  {% else %}
+  <header class="auth-header"><a class="brand" href="/"><span class="brand-mark"><i data-lucide="layers-2"></i></span>Karto<span class="brand-label">STUDIO</span></a><span class="auth-header-label">Sotuvchi ish maydoni</span></header>
+  <main id="main" class="auth-main">{% block public_content %}{% endblock %}</main>
+  <footer class="auth-footer"><span>Mustaqil vosita. Uzum Market bilan rasmiy bog'liq emas.</span><a href="/privacy">Maxfiylik</a></footer>
+  {% endif %}
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <dialog id="confirm-dialog"><form method="dialog"><h2 id="confirm-title">Amalni tasdiqlang</h2><p id="confirm-message"></p><div class="dialog-actions"><button class="button secondary" value="cancel">Bekor qilish</button><button class="button primary" value="confirm">Tasdiqlash</button></div></form></dialog>
+</body>
+</html>

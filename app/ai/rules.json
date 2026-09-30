@@ -1,0 +1,38 @@
+{
+  "version": "uzum-public-2026-09-29",
+  "checked_on": "2026-09-28",
+  "source": "https://seller.uzum.uz/manual/5.product-creation/",
+  "sections": ["5.1", "5.3", "5.6", "5.8", "5.9"],
+  "verified_requirements": {
+    "languages": ["uz-Latn", "ru-Cyrl"],
+    "title_scheme": "product type + brand + model + key characteristic",
+    "title_minimum_words": 3,
+    "title_allowed_symbols": ", . : ; - – ( ) / “” % x *",
+    "title_starts_uppercase": true,
+    "no_title_emoji": true,
+    "no_capslock_except_brand_model": true,
+    "no_external_links_or_personal_contacts": true,
+    "no_subjective_claims_about_reviews_rating_or_popularity": true,
+    "no_medical_or_treatment_claims": true,
+    "short_description_sentences": "1-2",
+    "stop_words_allowed_when_part_of_product_brand_or_model": true,
+    "unlimited_shelf_life_items_need_warranty_information": true
+  },
+  "unverified": ["maximum text lengths in seller cabinet", "category-specific import templates"],
+  "internal_limits": {"title": 200, "short_description": 1000, "description": 10000},
+  "stop_patterns": [
+    "\\bакци\\w*", "\\bбесплатн\\w*", "\\bзаказат\\w*", "\\bзакажите\\b", "\\bкупит\\w*", "\\bкупите\\b",
+    "\\bк[эе]шб[эе]к\\w*", "\\bновинк\\w*", "\\bоригинал\\w*", "\\bраспродаж\\w*", "\\bскидк\\w*",
+    "\\bтренд\\w*", "\\bтоп\\b", "\\bхит(ы)?\\b", "\\bдешев\\w*", "\\bдешёв\\w*", "\\bдорого\\b", "\\bдороже\\b",
+    "\\bсамый дорогой\\b", "\\b(высокая|выгодная|доступная|идеальная|низкая|отличная|супер|топ) цен\\w*",
+    "\\bлучш\\w*", "\\bлидер продаж\\b", "\\bномер 1\\b", "№\\s*1\\b", "\\bтолько у нас\\b", "\\bтовар года\\b",
+    "\\bнет аналогов\\b", "\\bне как у конкурентов\\b", "\\bвсе выбирают\\b", "\\bnew\\b", "\\bsale\\b",
+    "\\baksiya\\w*", "\\bbepul\\w*", "\\bbuyurtma (qiling|bering)\\b", "\\bsotib oling\\b", "\\bxarid qiling\\b",
+    "\\bkeshbek\\w*", "\\byangilik\\w*", "\\boriginal\\w*", "\\bchegirma\\w*", "\\btrend\\w*", "\\bx?hit\\b",
+    "\\btop\\b", "\\barzon\\w*", "\\bqimmat\\w*", "\\beng (yaxshi|zo'r|sifatli|arzon|qimmat|mashhur|ommabop)\\b",
+    "\\bfaqat bizda\\b", "\\banalogi yo'q\\b", "\\bo'xshashi yo'q\\b", "\\bsotuv yetakchisi\\b", "\\byil mahsuloti\\b",
+    "\\braqam 1\\b", "\\b1-raqamli\\b", "\\bdavolaydi\\b", "\\bshifobaxsh\\b", "\\bлечит\\w*", "\\bлечебн\\w*",
+    "\\bодобрен\\w* врач\\w*", "\\bshifokorlar tomonidan\\b"
+  ],
+  "export_kind": "generic_data_not_uzum_import"
+}

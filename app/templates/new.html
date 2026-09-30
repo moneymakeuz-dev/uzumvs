@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block workspace_content %}
+<div class="page-heading"><div><div class="eyebrow">MAHSULOT STUDIYASI</div><h1>Yangi kartochka</h1></div><a href="/cards" class="button secondary"><i data-lucide="layout-grid"></i>Kartochkalar</a></div>
+{% if not user.email_verified_at %}<div class="notice warning"><i data-lucide="mail"></i><span>Email tasdiqlanmagan. <a href="/profile">Tasdiqlash xatini yuborish</a></span></div>{% endif %}
+{% if settings.ai_provider == 'disabled' %}<div class="notice warning"><i data-lucide="info"></i>AI xizmati ulanmagan. Draft saqlanadi, generatsiya uchun Gemini sozlamalari kerak.</div>{% elif settings.ai_provider == 'mock' %}<div class="notice warning"><i data-lucide="info"></i>Sinov rejimi. AI javoblari namuna, haqiqiy rasm tahlil qilinmaydi.</div>{% endif %}
+<form id="new-card-form" data-consent-version="{{ settings.consent_version }}">
+  <div class="new-card-grid">
+    <section class="upload-section"><div class="section-heading"><h2>Mahsulot rasmlari</h2><span class="count-label" id="image-count">0 / 5</span></div><div id="image-shelf" class="image-shelf"></div>
+      <label class="dropzone" for="images"><input id="images" class="file-input" type="file" multiple accept="image/jpeg,image/png,image/webp"><span class="drop-icon"><i data-lucide="image-plus"></i></span><strong>Rasmlarni tanlash</strong><small>JPEG, PNG, WebP &middot; har biri 10 MiB gacha</small></label>
+    </section>
+    <section class="notes-section"><div class="section-heading"><h2>Mahsulot ma'lumotlari</h2><span class="count-label">Ixtiyoriy</span></div><label for="seller-notes">Tasdiqlangan faktlar</label><textarea id="seller-notes" maxlength="2000" placeholder="Brend, model, material, o'lcham va boshqa ma'lum faktlar..."></textarea><div class="notes-meta">2000 belgigacha</div><label class="consent-label" for="consent"><input id="consent" type="checkbox" required><span>Rasmlar va izohni Google Gemini xizmatiga qayta ishlash uchun yuborishga roziman. <a href="/privacy" target="_blank" rel="noopener">Maxfiylik</a></span></label></section>
+  </div>
+  <div class="submit-row"><span class="quiet"><i data-lucide="shield-check"></i>Shaxsiy kartochka</span><button type="submit" class="button primary" disabled><i data-lucide="sparkles"></i>Kartochka yaratish</button></div>
+</form>
+{% endblock %}

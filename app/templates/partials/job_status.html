@@ -1,0 +1,17 @@
+<section id="job-status" class="job-status {{ view.status or 'idle' }}" data-status="{{ view.status or '' }}" data-version="{{ card.version }}"
+  {% if view.active %}hx-get="/cards/{{ card.id }}/status" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}
+  {% if not view.active and view.status != 'failed' and not view.can_generate %}hidden{% endif %} aria-live="polite">
+  {% if view.active %}
+  <span class="job-icon"><i data-lucide="loader-circle" class="spinning"></i></span>
+  <div class="job-text"><strong>{{ view.label }}</strong><p>{% if view.status == 'queued' %}Vazifa navbatda. Sahifani yopsangiz ham davom etadi.{% else %}AI kartochka matnini tayyorlayapti. Tahrirlash vaqtincha yopiq.{% endif %}</p></div>
+  {% if view.status == 'queued' %}<button type="button" class="button secondary" data-action="cancel-job" data-job-id="{{ view.job.id }}"><i data-lucide="x"></i>Bekor qilish</button>{% endif %}
+  {% elif view.status == 'failed' %}
+  <span class="job-icon"><i data-lucide="triangle-alert"></i></span>
+  <div class="job-text"><strong>Yaratilmadi</strong><p>{{ view.message }}</p></div>
+  {% if view.can_generate %}<button type="button" class="button primary" data-action="generate-initial"><i data-lucide="refresh-cw"></i>Qayta urinish</button>{% endif %}
+  {% elif view.can_generate %}
+  <span class="job-icon"><i data-lucide="sparkles"></i></span>
+  <div class="job-text"><strong>Draft saqlangan</strong><p>{% if view.status == 'cancelled' %}Vazifa bekor qilindi, limit qaytarildi. {% endif %}Kartochka matnini yaratishni boshlang.</p></div>
+  <button type="button" class="button primary" data-action="generate-initial"><i data-lucide="sparkles"></i>Kartochka yaratish</button>
+  {% endif %}
+</section>

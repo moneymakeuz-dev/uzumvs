@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block public_content %}
+<section class="auth-form-region">
+  <div class="eyebrow"><span class="status-dot"></span> KARTO HISOBI</div>
+  <h1>{% if action == 'login' %}Xush kelibsiz.{% elif action == 'register' %}Hisob yarating.{% elif action == 'forgot-password' %}Parolni tiklash{% elif action == 'reset-password' %}Yangi parol{% else %}Emailni tasdiqlash{% endif %}</h1>
+  {% if notice %}<div class="notice success" role="status"><i data-lucide="circle-check"></i>{{ notice }}</div>{% endif %}
+  {% if error %}<div class="notice danger" role="alert">{{ error }}</div>{% endif %}
+  <form method="post" action="/auth/{{ action }}" class="auth-form" data-busy-form>
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    {% if action in ['verify-email', 'reset-password'] %}<input type="hidden" name="token" value="{{ token }}">{% endif %}
+    {% if action in ['login', 'register', 'forgot-password'] %}
+    <label for="email">Email manzil</label><input id="email" type="email" name="email" autocomplete="email" required maxlength="254" placeholder="siz@kompaniya.uz">
+    {% endif %}
+    {% if action in ['login', 'register', 'reset-password'] %}
+    <div class="label-row"><label for="password">{% if action == 'reset-password' %}Yangi parol{% else %}Parol{% endif %}</label>{% if action == 'login' %}<a href="/auth/forgot-password">Parolni unutdingizmi?</a>{% endif %}</div>
+    <div class="password-field"><input id="password" type="password" name="password" autocomplete="{{ 'current-password' if action == 'login' else 'new-password' }}" required minlength="{{ 1 if action == 'login' else 12 }}" maxlength="128" placeholder="{{ 'Parolingiz' if action == 'login' else 'Kamida 12 belgi' }}"><button type="button" class="icon-button" data-action="show-password" title="Parolni ko'rsatish" aria-label="Parolni ko'rsatish"><i data-lucide="eye"></i></button></div>
+    {% endif %}
+    <button class="button primary auth-submit" type="submit">{% if action == 'login' %}Kirish{% elif action == 'register' %}Hisob yaratish{% elif action == 'forgot-password' %}Havolani yuborish{% elif action == 'reset-password' %}Parolni yangilash{% else %}Emailni tasdiqlash{% endif %}<i data-lucide="arrow-right"></i></button>
+  </form>
+  <div class="auth-alternative">{% if action == 'login' %}Hisobingiz yo'qmi? <a href="/auth/register">Ro'yxatdan o'tish</a>{% else %}<a href="/auth/login"><i data-lucide="arrow-left"></i>Kirish sahifasiga</a>{% endif %}</div>
+</section>
+<figure class="auth-visual" aria-label="Karto kartochka namunasi">
+  <div class="preview-window">
+    <div class="preview-toolbar"><span></span><span></span><span></span></div>
+    <div class="preview-body">
+      <div class="preview-photo"><span class="preview-mug"></span><span class="preview-shadow"></span></div>
+      <div class="preview-fields">
+        <span class="preview-label">SARLAVHA &middot; UZ</span><strong>Keramik chashka, oq, 350 ml</strong>
+        <span class="preview-label">&#1053;&#1040;&#1047;&#1042;&#1040;&#1053;&#1048;&#1045; &middot; RU</span><strong>&#1050;&#1077;&#1088;&#1072;&#1084;&#1080;&#1095;&#1077;&#1089;&#1082;&#1072;&#1103; &#1082;&#1088;&#1091;&#1078;&#1082;&#1072;, &#1073;&#1077;&#1083;&#1072;&#1103;, 350 &#1084;&#1083;</strong>
+        <span class="preview-review"><span class="note-mark">!</span>Materialni tekshiring</span>
+      </div>
+    </div>
+  </div>
+  <figcaption><span class="visual-index">RASM &rarr; IKKI TILDAGI KARTOCHKA</span><span class="visual-label">AI yozadi, siz tekshirasiz.</span><span class="visual-rule"></span></figcaption>
+</figure>
+{% endblock %}
