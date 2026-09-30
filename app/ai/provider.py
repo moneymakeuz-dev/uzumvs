@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 from dataclasses import dataclass
 from typing import Any
 
@@ -18,6 +19,9 @@ from app.schemas import (
 )
 from app.services.images import image_path
 
+logger = logging.getLogger(__name__)
+# Gemini rejects array item-count limits with a generic 400; Pydantic still enforces them after parsing.
+UNSUPPORTED_SCHEMA_KEYS = {"$defs", "$schema", "default", "maxItems", "minItems"}
 PROMPT_VERSION = "product-card-v1"
 SYSTEM_PROMPT = """You draft product listing TEXT in Uzbek Latin and Russian Cyrillic.
 Only describe the product supported by supplied images and seller facts.
@@ -51,11 +55,13 @@ class ProviderFailure(Exception):
 
 
 def _gemini_schema(schema: dict[str, Any]) -> dict[str, Any]:
-    def convert(value: Any) -> Any:
+    def convert(value: Any, properties: bool = False) -> Any:
         if isinstance(value, list):
             return [convert(item) for item in value]
         if not isinstance(value, dict):
             return value
+        if properties:
+            return {key: convert(item) for key, item in value.items()}
         if "$ref" in value:
             target: Any = schema
             reference = value["$ref"]
@@ -68,16 +74,15 @@ def _gemini_schema(schema: dict[str, Any]) -> dict[str, Any]:
             return convert(expanded)
         converted: dict[str, Any] = {}
         for key, item in value.items():
-            if key in {"$defs", "$schema", "default"}:
+            if key in UNSUPPORTED_SCHEMA_KEYS:
                 continue
             if key == "const":
                 converted["enum"] = [item]
                 continue
-            converted[key] = convert(item)
+            converted[key] = convert(item, key == "properties")
         return converted
 
-    parsed = types.Schema.model_validate(convert(schema))
-    return parsed.model_dump(by_alias=True, exclude_none=True)
+    return convert(schema)
 
 
 async def generate(settings: Settings, snapshot: dict[str, Any]) -> ProviderResult:
@@ -137,6 +142,7 @@ async def generate_gemini(api: Any, settings: Settings, parts: list,
             except (ValueError, AttributeError):
                 retry_after = 16
         retryable = (error.code == 429 or (error.code or 0) >= 500) and retry_after <= 15
+        logger.warning("gemini_api_error status=%s code=%s retryable=%s", error.code, error.status, retryable)
         raise ProviderFailure("provider_unavailable", retryable, called, retry_after) from None
     except (TimeoutError, OSError, httpx.HTTPError):
         raise ProviderFailure("provider_timeout", called=called) from None

@@ -49,16 +49,20 @@ def test_field_schema_is_specific():
         field_schema("password")
 
 
-def test_full_response_schema_uses_sdk_pydantic_model():
+def test_full_response_schema_is_gemini_compatible_json_schema():
     field = CardContent.model_json_schema()["properties"]["schema_version"]
     assert field["type"] == "integer"
     assert field["minimum"] == field["maximum"] == 1
     schema = _gemini_schema(CardContent.model_json_schema())
     assert schema["properties"]["schema_version"]["minimum"] == 1
     assert schema["properties"]["schema_version"]["maximum"] == 1
-    assert schema["properties"]["title"]["properties"]["uz"]["type"] == "STRING"
-    assert "additionalProperties" in schema["properties"]["title"]
-    assert "additional_properties" not in str(schema)
+    assert schema["properties"]["title"]["properties"]["uz"]["type"] == "string"
+    assert schema["properties"]["title"]["additionalProperties"] is False
+    assert set(schema["required"]) == set(CardContent.model_json_schema()["required"])
+    text = json.dumps(schema)
+    for key in ("$ref", "$defs", "maxItems", "minItems", "additional_properties"):
+        assert key not in text
+    assert "maxItems" not in json.dumps(_gemini_schema(field_schema("keywords.uz")))
 
 
 @pytest.mark.parametrize("schema", [
