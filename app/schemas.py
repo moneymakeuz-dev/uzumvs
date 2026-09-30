@@ -83,7 +83,7 @@ def inspect_text(value: Any) -> None:
 
 
 class CardContent(StrictModel):
-    schema_version: Literal[1] = 1
+    schema_version: int = Field(default=1, ge=1, le=1)
     title: Bilingual
     short_description: Bilingual
     description: Bilingual

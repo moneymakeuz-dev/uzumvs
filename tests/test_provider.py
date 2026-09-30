@@ -1,4 +1,5 @@
 import json
+from types import SimpleNamespace
 
 import pytest
 from google.genai import types
@@ -6,8 +7,10 @@ from google.genai import types
 from app.ai.provider import (
     ProviderFailure,
     ProviderResult,
+    _gemini_schema,
     _thinking_config,
     generate,
+    generate_gemini,
     mock_result,
     parse_result,
 )
@@ -44,6 +47,38 @@ def test_field_schema_is_specific():
     assert schema["properties"]["value"]["type"] == "array"
     with pytest.raises(ValueError):
         field_schema("password")
+
+
+def test_full_response_schema_uses_sdk_pydantic_model():
+    field = CardContent.model_json_schema()["properties"]["schema_version"]
+    assert field["type"] == "integer"
+    assert field["minimum"] == field["maximum"] == 1
+    schema = _gemini_schema(CardContent.model_json_schema())
+    assert schema["properties"]["schema_version"]["minimum"] == 1
+    assert schema["properties"]["schema_version"]["maximum"] == 1
+    assert schema["properties"]["title"]["properties"]["uz"]["type"] == "STRING"
+    assert "additionalProperties" in schema["properties"]["title"]
+    assert "additional_properties" not in str(schema)
+
+
+@pytest.mark.parametrize("schema", [
+    CardContent,
+    {"type": "object", "properties": {"value": {"type": "string"}}},
+])
+async def test_generate_gemini_sends_sdk_schema(schema):
+    class FakeModels:
+        async def count_tokens(self, **kwargs):
+            return SimpleNamespace(total_tokens=1)
+
+        async def generate_content(self, **kwargs):
+            self.config = kwargs["config"]
+            return SimpleNamespace(text="{}", usage_metadata=None, response_id="synthetic")
+
+    models = FakeModels()
+    settings = Settings(_env_file=None, app_env="test", ai_provider="mock")
+    await generate_gemini(SimpleNamespace(models=models), settings, [], schema)
+    assert isinstance(models.config.response_json_schema, dict)
+    assert models.config.response_schema is None
 
 
 @pytest.mark.parametrize("model,thinking_level,thinking_budget", [

@@ -50,12 +50,42 @@ class ProviderFailure(Exception):
         self.code, self.retryable, self.called, self.retry_after = code, retryable, called, retry_after
 
 
+def _gemini_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    def convert(value: Any) -> Any:
+        if isinstance(value, list):
+            return [convert(item) for item in value]
+        if not isinstance(value, dict):
+            return value
+        if "$ref" in value:
+            target: Any = schema
+            reference = value["$ref"]
+            if not reference.startswith("#/"):
+                raise ValueError("Only local JSON schema references are supported")
+            for part in reference[2:].split("/"):
+                target = target[part.replace("~1", "/").replace("~0", "~")]
+            expanded = dict(target)
+            expanded.update({key: item for key, item in value.items() if key != "$ref"})
+            return convert(expanded)
+        converted: dict[str, Any] = {}
+        for key, item in value.items():
+            if key in {"$defs", "$schema", "default"}:
+                continue
+            if key == "const":
+                converted["enum"] = [item]
+                continue
+            converted[key] = convert(item)
+        return converted
+
+    parsed = types.Schema.model_validate(convert(schema))
+    return parsed.model_dump(by_alias=True, exclude_none=True)
+
+
 async def generate(settings: Settings, snapshot: dict[str, Any]) -> ProviderResult:
     if settings.ai_provider == "mock" and settings.app_env != "production":
         return mock_result(snapshot)
     if settings.ai_provider != "gemini":
         raise ProviderFailure("ai_not_configured", called=False)
-    schema = field_schema(snapshot["field_path"]) if snapshot.get("field_path") else CardContent.model_json_schema()
+    schema = field_schema(snapshot["field_path"]) if snapshot.get("field_path") else CardContent
     prompt = json.dumps({"seller_notes": snapshot["seller_notes"], "current_content": snapshot.get("content"),
                          "requested_field": snapshot.get("field_path"), "rules": RULES}, ensure_ascii=False)
     parts = [types.Part.from_text(text=prompt)]
@@ -74,19 +104,26 @@ async def generate(settings: Settings, snapshot: dict[str, Any]) -> ProviderResu
         client.close()
 
 
-async def generate_gemini(api: Any, settings: Settings, parts: list, schema: dict) -> ProviderResult:
+async def generate_gemini(api: Any, settings: Settings, parts: list,
+                          schema: dict[str, Any] | type[CardContent]) -> ProviderResult:
     called = False
     try:
         count = await api.models.count_tokens(model=settings.ai_model, contents=parts)
-        overhead = len(SYSTEM_PROMPT.encode()) + len(json.dumps(schema).encode())
+        schema_json = schema if isinstance(schema, dict) else schema.model_json_schema()
+        response_schema = _gemini_schema(schema_json)
+        overhead = len(SYSTEM_PROMPT.encode()) + len(json.dumps(schema_json).encode())
         if count.total_tokens is None or count.total_tokens + overhead > settings.ai_max_input_tokens:
             raise ProviderFailure("input_too_large", called=False)
         called = True
         thinking = _thinking_config(settings.ai_model)
-        response = await api.models.generate_content(model=settings.ai_model, contents=parts, config=types.GenerateContentConfig(
-            system_instruction=SYSTEM_PROMPT, response_mime_type="application/json", response_json_schema=schema,
-            temperature=0.2, max_output_tokens=settings.ai_max_output_tokens, thinking_config=thinking,
-        ))
+        response = await api.models.generate_content(
+            model=settings.ai_model, contents=parts,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT, response_mime_type="application/json",
+                temperature=0.2, max_output_tokens=settings.ai_max_output_tokens,
+                thinking_config=thinking, response_json_schema=response_schema,
+            ),
+        )
         usage = response.usage_metadata
         return ProviderResult(response.text or "", usage.prompt_token_count if usage else None,
                               usage.candidates_token_count if usage else None,
