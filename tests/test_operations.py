@@ -161,7 +161,10 @@ async def test_parallel_money_reservations_never_exceed_daily_budget(database, a
         async with db.transaction() as session:
             job = await jobs.enqueue(session, owner.id, card_id, GenerateRequest(operation="initial", expected_version=1), key, settings)
         job_ids.append(UUID(job["id"]))
-    priced = settings.model_copy(update={"ai_provider": "gemini", "ai_daily_budget_usd": Decimal("0.02")})
+    priced = settings.model_copy(update={"ai_provider": "gemini", "ai_max_input_tokens": 1024,
+                                        "ai_max_output_tokens": 256})
+    call_cost = budget.maximum_call_cost(priced)
+    priced = priced.model_copy(update={"ai_daily_budget_usd": call_cost})
 
     async def reserve(job_id):
         try:
@@ -174,7 +177,7 @@ async def test_parallel_money_reservations_never_exceed_daily_budget(database, a
     assert sorted(await asyncio.gather(*(reserve(job_id) for job_id in job_ids))) == ["budget_exhausted", "reserved"]
     async with db.transaction() as session:
         row = await session.get(DailyBudget, periods()[1])
-    assert row.reserved_usd == budget.maximum_call_cost(priced) <= Decimal("0.02")
+    assert row.reserved_usd == budget.maximum_call_cost(priced) == call_cost <= Decimal("0.02")
 
 
 async def test_alerts_are_delivered_to_webhook(monkeypatch):

@@ -1,8 +1,16 @@
 import json
 
 import pytest
+from google.genai import types
 
-from app.ai.provider import ProviderFailure, ProviderResult, generate, mock_result, parse_result
+from app.ai.provider import (
+    ProviderFailure,
+    ProviderResult,
+    _thinking_config,
+    generate,
+    mock_result,
+    parse_result,
+)
 from app.ai.rules import check_business_rules, prepare_reviews
 from app.config import Settings
 from app.schemas import CardContent, field_schema
@@ -36,6 +44,20 @@ def test_field_schema_is_specific():
     assert schema["properties"]["value"]["type"] == "array"
     with pytest.raises(ValueError):
         field_schema("password")
+
+
+@pytest.mark.parametrize("model,thinking_level,thinking_budget", [
+    ("gemini-2.5-flash", None, 0),
+    ("gemini-3.8-flash", types.ThinkingLevel.LOW, None),
+    ("other-model", None, None),
+])
+def test_thinking_config_matches_model(model, thinking_level, thinking_budget):
+    config = _thinking_config(model)
+    if thinking_level is None and thinking_budget is None:
+        assert config is None
+    else:
+        assert config.thinking_level == thinking_level
+        assert config.thinking_budget == thinking_budget
 
 
 def provider_result(**changes):

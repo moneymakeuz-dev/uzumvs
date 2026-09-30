@@ -82,7 +82,7 @@ async def generate_gemini(api: Any, settings: Settings, parts: list, schema: dic
         if count.total_tokens is None or count.total_tokens + overhead > settings.ai_max_input_tokens:
             raise ProviderFailure("input_too_large", called=False)
         called = True
-        thinking = types.ThinkingConfig(thinking_budget=0) if settings.ai_model.startswith("gemini-2.5-flash") else None
+        thinking = _thinking_config(settings.ai_model)
         response = await api.models.generate_content(model=settings.ai_model, contents=parts, config=types.GenerateContentConfig(
             system_instruction=SYSTEM_PROMPT, response_mime_type="application/json", response_json_schema=schema,
             temperature=0.2, max_output_tokens=settings.ai_max_output_tokens, thinking_config=thinking,
@@ -103,6 +103,14 @@ async def generate_gemini(api: Any, settings: Settings, parts: list, schema: dic
         raise ProviderFailure("provider_unavailable", retryable, called, retry_after) from None
     except (TimeoutError, OSError, httpx.HTTPError):
         raise ProviderFailure("provider_timeout", called=called) from None
+
+
+def _thinking_config(model: str) -> types.ThinkingConfig | None:
+    if model.startswith("gemini-2.5-flash"):
+        return types.ThinkingConfig(thinking_budget=0)
+    if model.startswith("gemini-3.8-flash"):
+        return types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW)
+    return None
 
 
 def parse_result(result: ProviderResult, snapshot: dict[str, Any]) -> CardContent:

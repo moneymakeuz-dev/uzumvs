@@ -21,12 +21,12 @@ class Settings(BaseSettings):
     mail_dir: Path = ROOT / "var" / "mail"
     allowed_hosts: str = "localhost,127.0.0.1,testserver"
     ai_provider: Literal["disabled", "gemini", "mock"] = "disabled"
-    ai_model: str = "gemini-2.5-flash"
+    ai_model: str = "gemini-3.8-flash"
     gemini_api_key: SecretStr = SecretStr("")
     ai_daily_budget_usd: Decimal = Field(default=Decimal("0"), ge=0)
-    ai_input_price_per_million: Decimal = Field(default=Decimal("0.30"), ge=0)
-    ai_output_price_per_million: Decimal = Field(default=Decimal("2.50"), ge=0)
-    ai_price_version: str = "gemini-2.5-flash-2026-09-28"
+    ai_input_price_per_million: Decimal = Field(default=Decimal("0.75"), ge=0)
+    ai_output_price_per_million: Decimal = Field(default=Decimal("3.75"), ge=0)
+    ai_price_version: str = "gemini-3.8-flash-2026-09-24"
     ai_max_input_tokens: int = Field(default=16384, ge=1024, le=100000)
     ai_max_output_tokens: int = Field(default=4096, ge=256, le=4096)
     ai_terms_accepted: bool = False

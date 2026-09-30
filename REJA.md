@@ -160,7 +160,7 @@ Foreign key lar va o'chirish tartibi migratsiyalarda aniq bo'ladi. Faylni o'chir
 
 ## 7. AI generatsiya shartnomasi
 
-Boshlang'ich model nomzodi Gemini 2.5 Flash; mavjudligi, rasm/structured output qo'llashi va narxi T04 da tekshiriladi. Model `AI_MODEL` orqali tanlanadi. O'z-o'zidan boshqa providerga o'tish yo'q: boshqa xizmatga rasm yuborish alohida tasdiqlanadigan qaror.
+Boshlang'ich model Gemini 3.8 Flash (`gemini-3.8-flash`); 2026-09-30 tekshiruvida rasm kirishi va structured output qo'llashi tasdiqlandi. Paid-tier narx manbasi va sanasi `TODO.md` dagi T04 dalilida yuritiladi. Model `AI_MODEL` orqali tanlanadi. O'z-o'zidan boshqa providerga o'tish yo'q: boshqa xizmatga rasm yuborish alohida tasdiqlanadigan qaror.
 
 1. Serverga tegishli rasm ID'lari va saqlangan sotuvchi izohi olinadi; foydalanuvchi bergan tashqi URL yuklanmaydi.
 2. Prompt, sxema va tekshirilgan Uzum qoidalarining versiyasi job snapshot'iga yoziladi.
