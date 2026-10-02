@@ -115,8 +115,9 @@ test('seller completes the card lifecycle', async ({ page, context }) => {
   await expect(page.getByLabel('Uzum shabloni (.xlsm)')).toBeVisible();
   await page.route('**/api/cards/*/uzum-template/catalog', route => route.fulfill({
     json: {
-      selected_category_id: '12301',
-      selected_category_path: 'Товары для дома > Кружки и чашки',
+      selected_category_id: null,
+      selected_category_path: '',
+      filters: { 12301: [{ id: '4159', name: 'Material', multiple: false, values: ['Керамика', 'Стекло'] }] },
       categories: [{ id: '12301', title: 'Кружки и чашки', path: 'Товары для дома > Кружки и чашки' }],
       countries: ['Узбекистан'],
       shops: [{ id: '15895', name: 'Test shop' }],
@@ -135,6 +136,7 @@ test('seller completes the card lifecycle', async ({ page, context }) => {
   await expect(page.locator('#uzum-category-search')).toHaveValue('Товары для дома > Кружки и чашки');
   await expect(page.locator('#uzum-shop')).toHaveValue('15895');
   await page.locator('#uzum-brand').fill('Отсутствует бренд');
+  await page.locator('#uzum-filters select').selectOption('Керамика');
   await page.locator('#uzum-country').fill('Узбекистан');
   await page.locator('#uzum-ikpu').fill('1234567890123456');
   await page.locator('#uzum-photo-urls').fill('https://example.com/mug.jpg');

@@ -202,6 +202,27 @@ async def test_uzum_template_catalog_and_card_download(database, account, monkey
         assert response.headers["content-type"] == "application/vnd.ms-excel.sheet.macroEnabled.12"
         assert response.headers["cache-control"] == "no-store"
 
+        captured = {}
+
+        async def fake_publish(paths):
+            captured["count"] = len(paths)
+            return ["https://files.catbox.moe/a.jpg"]
+
+        def capture_fill(_template, values):
+            captured["urls"] = values["photo_urls"]
+            return b"filled-xlsm"
+
+        monkeypatch.setattr(card_routes, "publish_images", fake_publish)
+        monkeypatch.setattr(card_routes, "fill_template", capture_fill)
+        auto = await client.post(
+            f"/api/cards/{card_id}/uzum-import-file",
+            data={"payload": json.dumps({**payload, "photo_urls": []})},
+            files={"template": ("official.xlsm", b"template", "application/octet-stream")},
+        )
+        assert auto.status_code == 200, auto.text
+        assert captured == {"count": 1, "urls": ["https://files.catbox.moe/a.jpg"]}
+        monkeypatch.setattr(card_routes, "fill_template", lambda _template, _values: b"filled-xlsm")
+
         publish_payload = {**payload, "expected_version": 1, "shop_id": "15895"}
         published = await client.post(
             f"/api/cards/{card_id}/uzum-publish",

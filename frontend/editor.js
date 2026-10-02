@@ -537,17 +537,30 @@ async function loadUzumTemplate(file) {
 
 function updateUzumCategoryActions() {
   const selectedId = document.querySelector('#uzum-category-id').value;
-  const preparedId = state.uzumCatalog?.selected_category_id;
-  const ready = Boolean(state.uzumTemplate && selectedId && preparedId && selectedId === preparedId);
+  const ready = Boolean(state.uzumTemplate && selectedId);
   document.querySelector('#uzum-export-submit').disabled = !ready;
   document.querySelector('#uzum-download-file').disabled = !ready;
-  const preparedPath = state.uzumCatalog?.selected_category_path || 'Aniq emas';
-  document.querySelector('#uzum-template-category-note').textContent = preparedId
-    ? `Excel makrosida tayyorlangan kategoriya: ${preparedPath} | ${preparedId}${ready ? ' · Mos' : ''}`
-    : 'Shablonda Excel makrosi bilan tanlangan kategoriya topilmadi. Excel’da kategoriyani tanlab, saqlangan shablonni qayta yuklang.';
-  if (selectedId && preparedId && selectedId !== preparedId) {
-    document.querySelector('#uzum-template-category-note').textContent +=
-      ' Tanlangan kategoriya bilan mos emas; upload bloklandi. Excel’da Karto tanlagan kategoriyani tanlab, shablonni qayta yuklang.';
+  document.querySelector('#uzum-template-category-note').textContent = '';
+  renderUzumFilters(selectedId);
+}
+
+function renderUzumFilters(categoryId) {
+  const box = document.querySelector('#uzum-filters');
+  const filters = (categoryId && state.uzumCatalog?.filters?.[categoryId]) || [];
+  if (box.dataset.category === categoryId) return;
+  box.dataset.category = categoryId;
+  box.replaceChildren();
+  box.hidden = !filters.length;
+  for (const filter of filters) {
+    const label = document.createElement('label');
+    label.append(`${filter.name}${filter.multiple ? ' (bir nechta)' : ''}`);
+    const select = document.createElement('select');
+    select.dataset.filterId = filter.id;
+    select.multiple = filter.multiple;
+    if (!filter.multiple) select.append(new Option('Tanlanmagan', ''));
+    for (const value of filter.values) select.append(new Option(value, value));
+    label.append(select);
+    box.append(label);
   }
 }
 
@@ -599,6 +612,9 @@ function collectUzumPayload() {
     barcode: document.querySelector('#uzum-barcode').value,
     color: document.querySelector('#uzum-color').value,
     size: document.querySelector('#uzum-size').value,
+    filters: Object.fromEntries([...document.querySelectorAll('#uzum-filters select')]
+      .map(select => [select.dataset.filterId, [...select.selectedOptions].map(option => option.value).filter(Boolean)])
+      .filter(([, values]) => values.length)),
   };
 }
 

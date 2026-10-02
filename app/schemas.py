@@ -212,7 +212,7 @@ class UzumTemplateRequest(StrictModel):
     brand: str = Field(min_length=1, max_length=100)
     country: str = Field(min_length=1, max_length=100)
     ikpu: str = Field(pattern=r"^\d{16}$")
-    photo_urls: list[str] = Field(min_length=1, max_length=5)
+    photo_urls: list[str] = Field(default_factory=list, max_length=5)
     sale_price: int = Field(gt=0)
     list_price: int = Field(gt=0)
     weight_g: int = Field(gt=0)
@@ -223,6 +223,7 @@ class UzumTemplateRequest(StrictModel):
     barcode: str = Field(default="", max_length=32)
     color: str = Field(default="", max_length=100)
     size: str = Field(default="", max_length=100)
+    filters: dict[str, list[str]] = Field(default_factory=dict, max_length=50)
 
 
 class UzumPublishRequest(UzumTemplateRequest):

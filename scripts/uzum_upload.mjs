@@ -17,6 +17,8 @@ if (!templatePath || !shopId || !email || !password || !profilePath) {
 }
 
 let context;
+let stage = 'start';
+const dryRun = process.env.UZUM_DRY_RUN === '1';
 try {
   await mkdir(profilePath, { recursive: true });
   context = await chromium.launchPersistentContext(path.resolve(profilePath), {
@@ -25,12 +27,14 @@ try {
     viewport: { width: 1440, height: 1000 },
   });
   const page = context.pages()[0] ?? await context.newPage();
+  stage = 'open_products';
   const productsUrl = `https://seller.uzum.uz/seller/${encodeURIComponent(shopId)}/products/all`;
   await page.goto(productsUrl, { waitUntil: 'domcontentloaded', timeout: 45_000 });
 
   if (page.url().includes('/showcaptcha')) {
     await page.waitForURL(url => !url.href.includes('/showcaptcha'), { timeout: 180_000 });
   }
+  stage = 'login';
   if (page.url().includes('/seller/signin')) {
     await page.getByRole('textbox').first().fill(email);
     await page.locator('input[type="password"]').fill(password);
@@ -43,8 +47,10 @@ try {
   await page.goto(productsUrl, { waitUntil: 'domcontentloaded', timeout: 45_000 });
   await page.getByText('Мои товары', { exact: true }).waitFor({ state: 'visible', timeout: 60_000 });
   const createLink = page.getByRole('link', { name: 'Создать карточку товара' });
-  await createLink.locator('xpath=..').getByRole('button').click();
+  stage = 'open_menu';
+  await createLink.locator('xpath=..').getByRole('button').last().click();
   await page.getByText('Загрузить из файла', { exact: true }).click();
+  stage = 'file_dialog';
   const dialog = page.getByRole('dialog');
   await dialog.waitFor({ state: 'visible', timeout: 15_000 });
   const fileInput = dialog.locator('input[type="file"]');
@@ -58,7 +64,9 @@ try {
   const submit = dialog.getByRole('button', { name: 'Загрузить', exact: true }).last();
   await submit.waitFor({ state: 'visible', timeout: 15_000 });
   await submit.waitFor({ state: 'attached' });
-  if (!(await submit.isEnabled())) {
+  if (dryRun) {
+    result('dry_run_ready');
+  } else if (!(await submit.isEnabled())) {
     result('failed', 'upload_disabled');
     process.exitCode = 1;
   } else {
@@ -76,8 +84,14 @@ try {
       process.exitCode = 1;
     }
   }
-} catch {
-  result('failed', 'auth_timeout');
+} catch (error) {
+  if (context && process.env.UZUM_DEBUG_DIR) {
+    const page = context.pages()[0];
+    await mkdir(process.env.UZUM_DEBUG_DIR, { recursive: true });
+    await page?.screenshot({ path: path.join(process.env.UZUM_DEBUG_DIR, `${stage}.png`) }).catch(() => {});
+  }
+  process.stderr.write(`stage=${stage} ${String(error?.message ?? error).split('\n')[0]}\n`);
+  result('failed', stage === 'login' || stage === 'open_products' ? 'auth_timeout' : 'ui_changed');
   process.exitCode = 1;
 } finally {
   if (context) await context.close();

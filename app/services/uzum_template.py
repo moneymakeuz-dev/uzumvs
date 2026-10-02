@@ -4,7 +4,7 @@ import re
 import unicodedata
 import zipfile
 from copy import copy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from difflib import SequenceMatcher
 from urllib.parse import urlparse
@@ -18,6 +18,8 @@ PKG_REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
 MAX_TEMPLATE_BYTES = 10 * 1024 * 1024
 MAX_TEMPLATE_ENTRIES = 2000
 MAX_TEMPLATE_UNCOMPRESSED = 32 * 1024 * 1024
+FILTER_START_COLUMN = 31
+FILTER_COLUMNS = 51
 STOP_WORDS = {"и", "для", "на", "по", "с", "в", "из", "к", "от", "до", "при", "the", "and"}
 PRODUCT_COLUMNS = {
     "title_ru": "A",
@@ -53,11 +55,13 @@ class TemplateInfo:
     brands: frozenset[str]
     countries: frozenset[str]
     selected_category_id: str | None
+    filters: dict[str, list[dict]] = field(default_factory=dict)
 
     def to_payload(self) -> dict:
         return {
             "selected_category_id": self.selected_category_id,
             "selected_category_path": self.categories.get(self.selected_category_id or "", ("", ""))[1],
+            "filters": self.filters,
             "categories": [
                 {"id": category_id, "title": title, "path": path}
                 for category_id, (title, path) in sorted(self.categories.items(), key=lambda item: item[1][1].casefold())
@@ -83,6 +87,7 @@ def inspect_template(data: bytes) -> TemplateInfo:
         if any(name not in columns for name in required):
             raise AppError("uzum_template_invalid", "Shablonda kategoriya ro'yxati topilmadi.")
         categories = {}
+        filters: dict[str, dict[str, dict]] = {}
         for row_number, cells in category_rows.items():
             if row_number == 1:
                 continue
@@ -92,6 +97,17 @@ def inspect_template(data: bytes) -> TemplateInfo:
             path = values.get(columns["full_path_ru"], "")
             if category_id.isdigit() and title and path:
                 categories[category_id] = (title, path)
+                filter_id = values.get(columns.get("filter_id", 0), "").strip()
+                if filter_id:
+                    item = filters.setdefault(category_id, {}).setdefault(filter_id, {
+                        "id": filter_id, "name": values.get(columns.get("filter_ru", 0), "").strip(),
+                        "multiple": values.get(columns.get("customer_type", 0), "").strip() != "SINGLE_CHOICE",
+                        "values": [],
+                    })
+                    for option in values.get(columns.get("filter_value_ru", 0), "").replace("\r", "").replace("\n", "").split(";"):
+                        option = option.replace("\xa0", " ").replace("\t", " ").strip()
+                        if option and option not in item["values"]:
+                            item["values"].append(option)
         catalog_rows = _rows(catalog_sheet, shared_strings)
         catalog_headers = _row_values(catalog_rows.get(1, {}), shared_strings)
         brands = set()
@@ -108,7 +124,8 @@ def inspect_template(data: bytes) -> TemplateInfo:
             raise AppError("uzum_template_invalid", "Uzum shablonidagi ma'lumotnomalar bo'sh.")
         selected = _row_values(_rows(product_sheet, shared_strings).get(1, {}), shared_strings).get(3, "")
         match = re.search(r"\|\s*(\d+)\s*$", selected)
-        return TemplateInfo(categories, frozenset(brands), frozenset(countries), match.group(1) if match else None)
+        return TemplateInfo(categories, frozenset(brands), frozenset(countries), match.group(1) if match else None,
+                            {key: list(value.values()) for key, value in filters.items()})
 
 
 def recommend_category(content: dict, seller_notes: str, categories: dict[str, tuple[str, str]]) -> dict | None:
@@ -169,10 +186,17 @@ def fill_template(data: bytes, values: dict) -> bytes:
     category_id = str(values.get("category_id", ""))
     if category_id not in info.categories:
         raise AppError("uzum_category_invalid", "Kategoriya ID shablonda topilmadi.")
-    if info.selected_category_id != category_id:
-        raise AppError("uzum_template_category_mismatch",
-                       "Shablonni Excel'da tanlangan kategoriya uchun yangilang — majburiy filterlar eskirgan bo'lishi mumkin.", 409)
     category_title, category_path = info.categories[category_id]
+    category_filters = info.filters.get(category_id, [])
+    chosen_filters = values.get("filters") or {}
+    if not isinstance(chosen_filters, dict) or set(chosen_filters) - {item["id"] for item in category_filters}:
+        raise AppError("uzum_filter_invalid", "Kategoriyaga tegishli bo'lmagan filter yuborildi.")
+    for item in category_filters:
+        selected = chosen_filters.get(item["id"]) or []
+        if (not isinstance(selected, list) or not all(isinstance(option, str) for option in selected)
+                or any(option not in item["values"] for option in selected)
+                or (not item["multiple"] and len(selected) > 1)):
+            raise AppError("uzum_filter_invalid", f"“{item['name']}” filteri uchun ro'yxatdagi qiymatni tanlang.")
     brand, country = str(values.get("brand", "")), str(values.get("country", ""))
     if brand not in info.brands:
         raise AppError("uzum_brand_invalid", "Brendni Uzum shablonidagi ro'yxatdan tanlang.")
@@ -224,6 +248,14 @@ def fill_template(data: bytes, values: dict) -> bytes:
         main_sheet = ET.fromstring(parts[main_path])
         _set_cell(main_sheet, "C1", f"{category_path} | {category_id}")
         _set_cell(main_sheet, "D1", int(category_id))
+        _clear_cells(main_sheet, (2, 3, 4), FILTER_START_COLUMN, FILTER_START_COLUMN + FILTER_COLUMNS - 1)
+        for offset, item in enumerate(category_filters):
+            column = _column_letters(FILTER_START_COLUMN + offset)
+            _set_cell(main_sheet, f"{column}2", item["name"])
+            _set_cell(main_sheet, f"{column}3", "выбор нескольких" if item["multiple"] else "выбор одного")
+            selected = chosen_filters.get(item["id"]) or []
+            if selected:
+                _set_cell(main_sheet, f"{column}4", ";".join(selected))
         for name, value in fields.items():
             _set_cell(main_sheet, f"{PRODUCT_COLUMNS[name]}4", value)
         ET.register_namespace("", MAIN_NS)
@@ -312,6 +344,26 @@ def _column_index(reference: str) -> int:
     for char in letters.group(0):
         result = result * 26 + ord(char) - ord("A") + 1
     return result
+
+
+def _column_letters(index: int) -> str:
+    letters = ""
+    while index:
+        index, remainder = divmod(index - 1, 26)
+        letters = chr(ord("A") + remainder) + letters
+    return letters
+
+
+def _clear_cells(root: ET.Element, row_numbers: tuple[int, ...], first: int, last: int) -> None:
+    main = f"{{{MAIN_NS}}}"
+    for row in root.findall(f"{main}sheetData/{main}row"):
+        if int(row.get("r", "0")) not in row_numbers:
+            continue
+        for cell in row.findall(main + "c"):
+            if first <= _column_index(cell.get("r", "")) <= last:
+                for child in list(cell):
+                    cell.remove(child)
+                cell.attrib.pop("t", None)
 
 
 def _set_cell(root: ET.Element, reference: str, value: str | int | Decimal) -> None:

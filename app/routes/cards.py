@@ -19,6 +19,7 @@ from app.schemas import (
     UzumTemplateRequest,
 )
 from app.services import cards, exports, jobs, quotas
+from app.services.image_hosting import publish_images
 from app.services.images import MAX_FILE_BYTES, image_path, prepare_image
 from app.services.uzum_seller import list_shops, upload_template
 from app.services.uzum_template import fill_template, inspect_template, recommend_category
@@ -182,8 +183,16 @@ async def _prepare_uzum_template(request: Request, card_id: UUID, payload_type):
         except ValueError:
             raise AppError("export_validation", "Kartochkada Uzum qoidalariga mos kelmagan matn bor.", 409) from None
         values = payload.model_dump()
-        values.update({"category_id": str(payload.category_id), "photo_urls": payload.photo_urls,
+        photo_urls = payload.photo_urls
+        if not photo_urls:
+            keys = (await session.scalars(
+                select(CardImage.storage_key).where(CardImage.card_id == card.id).order_by(CardImage.position),
+            )).all()
+            image_paths = [image_path(request.app.state.settings.upload_dir, key) for key in keys]
+        values.update({"category_id": str(payload.category_id), "photo_urls": photo_urls,
                        "seller_id": str(card.id), "content": content.model_dump()})
+    if not photo_urls:
+        values["photo_urls"] = await publish_images(image_paths)
     data = await asyncio.to_thread(fill_template, template_bytes, values)
     return data, payload
 

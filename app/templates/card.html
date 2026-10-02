@@ -39,10 +39,11 @@
     <form id="uzum-export-form">
       <div class="uzum-dialog-heading"><h2 id="uzum-export-title">Uzum XLSM tayyorlash</h2><button type="button" class="icon-button" data-action="close-uzum" aria-label="Yopish"><i data-lucide="x"></i></button></div>
       <label class="uzum-file-field">Uzum shabloni (.xlsm)<input id="uzum-template" type="file" accept=".xlsm,application/vnd.ms-excel.sheet.macroEnabled.12" required></label>
-      <p class="uzum-template-warning" role="note">Kategoriya filtrlari Excel makrosi bilan tayyorlanadi. Avtomatik yuborish uchun shablondagi faol kategoriya Karto’da tanlangan kategoriya bilan bir xil bo‘lishi shart; “Инструкция” varag‘i va majburiy filtrlarni tekshiring.</p>
+      <p class="uzum-template-warning" role="note">Faqat rasmiy Uzum shabloni kerak: kategoriya va filtrlar Karto tomonidan yoziladi, Excel shart emas. Fayl yuborilgach natijani Uzum kabinetidagi “Загрузки/Импорт” tarixida tekshiring.</p>
         <small id="uzum-template-category-note" aria-live="polite"></small>
       <div class="uzum-field"><label for="uzum-shop">Uzum do‘koni</label><select id="uzum-shop" required disabled><option value="">Avval shablonni tanlang</option></select></div>
       <div class="uzum-field"><label for="uzum-category-search">Kategoriya</label><input id="uzum-category-search" type="search" autocomplete="off" disabled required aria-autocomplete="list" aria-controls="uzum-category-options"><input id="uzum-category-id" type="hidden"><small id="uzum-category-recommendation" aria-live="polite"></small><div id="uzum-category-options" role="listbox" hidden></div></div>
+      <div id="uzum-filters" class="uzum-form-grid" hidden></div>
       <div class="uzum-form-grid">
         <label>Brend<input id="uzum-brand" list="uzum-brand-options" maxlength="100" required><datalist id="uzum-brand-options"><option value="Отсутствует бренд"></datalist></label>
         <label>Ishlab chiqarilgan mamlakat<input id="uzum-country" list="uzum-country-options" maxlength="100" required><datalist id="uzum-country-options"></datalist></label>
@@ -59,7 +60,7 @@
         <label>Rang<input id="uzum-color" maxlength="100"></label>
         <label>O'lcham<input id="uzum-size" maxlength="100"></label>
       </div>
-      <label class="uzum-file-field">Ommaviy HTTPS rasm havolalari, har qatorda bittadan<textarea id="uzum-photo-urls" rows="3" required></textarea></label>
+      <label class="uzum-file-field">Rasm havolalari (ixtiyoriy). Bo'sh qoldirsangiz, Karto rasmlarni o'zi ommaviy hostga yuklaydi<textarea id="uzum-photo-urls" rows="3"></textarea></label>
       <div class="dialog-actions"><button type="button" class="button secondary" data-action="close-uzum">Bekor qilish</button><button id="uzum-download-file" type="button" class="button secondary" data-action="download-uzum-file" disabled><i data-lucide="download"></i>Faqat XLSM olish</button><button id="uzum-export-submit" type="submit" class="button primary" disabled><i data-lucide="upload"></i>Uzum’ga yuborish</button></div>
     </form>
   </dialog>

@@ -61,11 +61,15 @@ def template_bytes() -> bytes:
         ),
         "xl/worksheets/sheet2.xml": sheet(
             f'<row r="1">{inline_cell("A1", "category_id")}{inline_cell("B1", "category_title")}'
-            f'{inline_cell("C1", "full_path_ru")}</row>'
+            f'{inline_cell("C1", "full_path_ru")}{inline_cell("D1", "filter_id")}'
+            f'{inline_cell("E1", "filter_ru")}{inline_cell("F1", "filter_value_ru")}'
+            f'{inline_cell("G1", "customer_type")}</row>'
             f'<row r="2"><c r="A2"><v>123</v></c>{inline_cell("B2", "Mugs")}'
             f'{inline_cell("C2", "Home > Kitchen > Mugs")}</row>'
             f'<row r="3"><c r="A3"><v>124</v></c>{inline_cell("B3", "Cups")}'
-            f'{inline_cell("C3", "Home > Kitchen > Cups")}</row>'
+            f'{inline_cell("C3", "Home > Kitchen > Cups")}<c r="D3"><v>77</v></c>'
+            f'{inline_cell("E3", "Material")}{inline_cell("F3", "Glass; Steel")}'
+            f'{inline_cell("G3", "SINGLE_CHOICE")}</row>'
         ),
         "xl/worksheets/sheet3.xml": sheet(
             f'<row r="1">{inline_cell("A1", "Sizes")}{inline_cell("B1", "Colors")}'
@@ -180,7 +184,25 @@ def test_recommend_category_returns_none_when_text_has_no_category_signal():
     assert recommend_category({"title": {"ru": "Предмет 350 мл"}}, "", categories) is None
 
 
-def test_template_rejects_category_different_from_macro_prepared_category():
+def test_template_fills_other_category_with_filters_and_clears_stale_filter_headers():
+    original = template_bytes()
+    assert inspect_template(original).filters == {
+        "124": [{"id": "77", "name": "Material", "multiple": False, "values": ["Glass", "Steel"]}],
+    }
+
+    result = fill_template(original, template_values(category_id="124", filters={"77": ["Glass"]}))
+    with ZipFile(BytesIO(result)) as filled:
+        root = ET.fromstring(filled.read("xl/worksheets/sheet1.xml"))
+    assert cell_text(root, "C1") == "Home > Kitchen > Cups | 124"
+    assert cell_text(root, "D1") == "124"
+    assert cell_text(root, "E4") == "Cups"
+    assert cell_text(root, "AE2") == "Material"
+    assert cell_text(root, "AE3") == "выбор одного"
+    assert cell_text(root, "AE4") == "Glass"
+
     with pytest.raises(AppError) as error:
-        fill_template(template_bytes(), template_values(category_id="124"))
-    assert error.value.code == "uzum_template_category_mismatch"
+        fill_template(original, template_values(category_id="124", filters={"77": ["Wood"]}))
+    assert error.value.code == "uzum_filter_invalid"
+    with pytest.raises(AppError) as error:
+        fill_template(original, template_values(category_id="123", filters={"77": ["Glass"]}))
+    assert error.value.code == "uzum_filter_invalid"
