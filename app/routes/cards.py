@@ -191,7 +191,7 @@ async def _prepare_uzum_template(request: Request, card_id: UUID, payload_type):
             )).all()
             image_paths = [image_path(request.app.state.settings.upload_dir, key) for key in keys]
         values.update({"category_id": str(payload.category_id), "photo_urls": photo_urls,
-                       "seller_id": str(card.id), "content": content.model_dump()})
+                       "seller_id": card.id.hex, "content": content.model_dump()})
     if not photo_urls:
         values["photo_urls"] = await publish_images(image_paths)
     if template_bytes is None:

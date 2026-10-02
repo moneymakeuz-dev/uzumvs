@@ -218,14 +218,14 @@ def fill_template(data: bytes, values: dict) -> bytes:
     if len(title["ru"]) > 90 or len(title["uz"]) > 90 or len(values["sku_group"]) > 100:
         raise AppError("uzum_text_limit", "Uzum nomi 90, SKU guruhi 100 belgidan oshmasligi kerak.")
     ikpu = str(values.get("ikpu") or "")
-    if ikpu and not re.fullmatch(r"\d{16,17}", ikpu):
-        raise AppError("uzum_ikpu_invalid", "IKPU 16-17 ta raqamdan iborat bo'lishi kerak.")
+    if not re.fullmatch(r"\d{16,17}", ikpu):
+        raise AppError("uzum_ikpu_invalid", "IKPU (16-17 raqam) Uzum uchun majburiy.")
     photo_urls = values.get("photo_urls") or []
     if not 1 <= len(photo_urls) <= 5 or any(not _is_public_https_url(url) for url in photo_urls):
         raise AppError("uzum_photo_url_invalid", "1-5 ta hammaga ochiq HTTPS rasm havolasini kiriting.")
-    sale_price = _positive_decimal(values.get("sale_price"), "Sotuv narxi") if values.get("sale_price") else None
+    sale_price = _positive_decimal(values.get("sale_price"), "Sotuv narxi")
     list_price = _positive_decimal(values.get("list_price"), "Eski narx") if values.get("list_price") else sale_price
-    if sale_price and list_price < sale_price:
+    if list_price < sale_price:
         raise AppError("uzum_price_invalid", "Eski narx sotuv narxidan kichik bo'lmasligi kerak.")
     numbers = {name: _positive_integer(values[name], label) if values.get(name) else None for name, label in (
         ("weight_g", "Vazn"), ("height_mm", "Balandlik"), ("width_mm", "En"), ("length_mm", "Uzunlik"),

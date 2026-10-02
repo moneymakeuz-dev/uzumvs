@@ -7,8 +7,8 @@ const email = process.env.UZUM_SELLER_EMAIL;
 const password = process.env.UZUM_SELLER_PASSWORD;
 const profilePath = process.env.UZUM_BROWSER_PROFILE;
 
-function result(status, code) {
-  process.stdout.write(`${JSON.stringify({ status, code })}\n`);
+function result(status, code, message) {
+  process.stdout.write(`${JSON.stringify({ status, code, message })}\n`);
 }
 
 if (!templatePath || !shopId || !email || !password || !profilePath) {
@@ -91,8 +91,15 @@ try {
     }, { timeout: 120_000 });
     await submit.click();
     const response = await accepted;
-    if (response.ok()) result('accepted');
-    else {
+    if (response.ok()) {
+      const failed = await page.getByText('Не удалось загрузить').first()
+        .waitFor({ state: 'visible', timeout: 20_000 }).then(() => true, () => false);
+      if (failed) {
+        const lines = await page.getByText(/^Строка №/).allInnerTexts();
+        result('failed', 'import_errors', [...new Set(lines.map(line => line.trim()))].slice(0, 10).join('; '));
+        process.exitCode = 1;
+      } else result('accepted');
+    } else {
       result('failed', 'upload_rejected');
       process.exitCode = 1;
     }

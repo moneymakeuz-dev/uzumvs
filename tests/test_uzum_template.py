@@ -162,14 +162,20 @@ def test_template_rejects_invalid_seller_data(changes, code):
 
 def test_template_rejects_incomplete_values_only_when_given_and_defaults_brand_country():
     original = template_bytes()
-    minimal = template_values(brand="", country="", ikpu="", sale_price=0, list_price=0, weight_g=0,
-                              height_mm=0, width_mm=0, length_mm=0)
+    minimal = template_values(brand="", country="", ikpu="06912001043000000", sale_price=10000, list_price=0,
+                              weight_g=0, height_mm=0, width_mm=0, length_mm=0)
     minimal["brand"] = "No brand"
     result = fill_template(original, minimal)
     with ZipFile(BytesIO(result)) as filled:
         root = ET.fromstring(filled.read("xl/worksheets/sheet1.xml"))
     assert cell_text(root, "A4") == "Кружка керамическая белая"
-    assert cell_text(root, "V4") == "" and cell_text(root, "Y4") == "" and cell_text(root, "AA4") == ""
+    assert cell_text(root, "V4") == "06912001043000000"
+    assert cell_text(root, "Y4") == "10000" and cell_text(root, "Z4") == "10000"
+    assert cell_text(root, "AA4") == ""
+    for changes, code in (({"ikpu": ""}, "uzum_ikpu_invalid"), ({"sale_price": 0}, "uzum_required_field")):
+        with pytest.raises(AppError) as error:
+            fill_template(original, template_values(**changes))
+        assert error.value.code == code
     assert fill_template(original, template_values(ikpu="06912001043000000"))
     with pytest.raises(AppError) as error:
         fill_template(original, template_values(sale_price=500, list_price=100))

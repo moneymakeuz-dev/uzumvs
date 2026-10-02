@@ -115,6 +115,8 @@ async def upload_template(settings: Settings, data: bytes, shop_id: str) -> dict
             code = result.get("code")
             if code == "auth_timeout":
                 raise AppError("uzum_auth_timeout", "Uzum kirishi, CAPTCHA yoki SMS tasdig'i vaqtida tugamadi.", 408)
+            if code == "import_errors":
+                raise AppError("uzum_import_errors", f"Uzum faylni rad etdi: {str(result.get('message') or '')[:600]}", 422)
             if code == "upload_rejected":
                 raise AppError("uzum_upload_rejected", "Uzum faylni qabul qilmadi; import oynasidagi xatoni tekshiring.", 422)
             raise AppError("uzum_upload_failed", "Uzum faylini yuborib bo'lmadi. Kabinetdagi holatni tekshiring.", 502)

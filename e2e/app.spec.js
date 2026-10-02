@@ -140,6 +140,7 @@ test('seller completes the card lifecycle', async ({ page, context }) => {
   await page.locator('#uzum-filters select').selectOption('Керамика');
   await page.locator('#uzum-country').fill('Узбекистан');
   await page.locator('#uzum-photo-urls').fill('https://example.com/mug.jpg');
+  await page.locator('#uzum-sale-price').fill('10000');
   const [uzumFile] = await Promise.all([page.waitForEvent('download'), page.locator('#uzum-download-file').click()]);
   expect(uzumFile.suggestedFilename()).toBe(`uzum-${await page.locator('#card-data').evaluate(el => JSON.parse(el.textContent).id)}.xlsm`);
   await page.getByRole('button', { name: 'Uzum’ga yuborish' }).click();
