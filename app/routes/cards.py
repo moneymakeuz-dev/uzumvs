@@ -19,6 +19,7 @@ from app.schemas import (
     UzumTemplateRequest,
 )
 from app.services import cards, exports, jobs, quotas
+from app.services.ikpu import recommended, suggest_ikpu
 from app.services.image_hosting import publish_images
 from app.services.images import MAX_FILE_BYTES, image_path, prepare_image
 from app.services.uzum_seller import list_shops, upload_template
@@ -218,6 +219,22 @@ async def uzum_template_catalog(request: Request, card_id: UUID):
     result["recommended_category"] = recommend_category(content, seller_notes, info.categories)
     result["shops"] = await list_shops(request.app.state.settings)
     return JSONResponse(result, headers={"Cache-Control": "no-store"})
+
+
+@router.get("/cards/{card_id}/ikpu")
+async def uzum_ikpu(request: Request, card_id: UUID, category: str = Query("", max_length=200),
+                    q: str = Query("", max_length=100)):
+    user = current_user(request, verified=True)
+    async with request.app.state.db.transaction() as session:
+        card = await cards.owned_card(session, user.id, card_id)
+        content = CardContent.model_validate(card.content_json).model_dump() if card.content_json else {}
+    title = ((content.get("title") or {}).get("ru")) or ""
+    hint = ((content.get("suggested_category") or {}).get("ru")) or ""
+    words = [word for word in re.findall(r"\w{4,}", title)][:3]
+    queries = [q] if q.strip() else [category, hint, " ".join(words[:2]), *words]
+    candidates = await suggest_ikpu(queries, f"{q} {category} {title} {hint}")
+    return JSONResponse({"candidates": candidates, "recommended": None if q.strip() else recommended(candidates)},
+                        headers={"Cache-Control": "no-store"})
 
 
 @router.get("/me/usage")

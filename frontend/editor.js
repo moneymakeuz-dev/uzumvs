@@ -478,6 +478,10 @@ async function openUzumExport() {
   form.reset();
   state.uzumTemplate = null;
   state.uzumCatalog = null;
+  state.ikpuCategory = '';
+  state.ikpuAuto = false;
+  document.querySelector('#uzum-ikpu-choice').replaceChildren(new Option('Avval kategoriyani tanlang', ''));
+  document.querySelector('#uzum-ikpu-choice').disabled = true;
   document.querySelector('#uzum-category-id').value = '';
   document.querySelector('#uzum-category-search').disabled = true;
   document.querySelector('#uzum-category-options').hidden = true;
@@ -542,6 +546,44 @@ function updateUzumCategoryActions() {
   document.querySelector('#uzum-download-file').disabled = !ready;
   document.querySelector('#uzum-template-category-note').textContent = '';
   renderUzumFilters(selectedId);
+  if (state.ikpuCategory !== selectedId) {
+    state.ikpuCategory = selectedId;
+    if (state.ikpuAuto) {
+      document.querySelector('#uzum-ikpu').value = '';
+      state.ikpuAuto = false;
+    }
+    document.querySelector('#uzum-ikpu-query').value = '';
+    loadIkpu('');
+  }
+}
+
+async function loadIkpu(query) {
+  const choice = document.querySelector('#uzum-ikpu-choice');
+  const categoryId = document.querySelector('#uzum-category-id').value;
+  if (!categoryId && !query) {
+    choice.replaceChildren(new Option('Avval kategoriyani tanlang', ''));
+    choice.disabled = true;
+    return;
+  }
+  const category = state.uzumCatalog?.categories.find(item => item.id === categoryId);
+  const params = new URLSearchParams({ category: category?.title || '', q: query });
+  choice.disabled = true;
+  choice.replaceChildren(new Option('IKPU qidirilmoqda…', ''));
+  try {
+    const result = await api(cardUrl(`/ikpu?${params}`));
+    if (query === '' && state.ikpuCategory !== categoryId) return;
+    choice.replaceChildren(new Option(result.candidates.length ? 'IKPU tanlang' : 'IKPU topilmadi (ixtiyoriy)', ''),
+      ...result.candidates.map(item => new Option(`${item.code} — ${item.name}`, item.code)));
+    choice.disabled = !result.candidates.length;
+    const ikpu = document.querySelector('#uzum-ikpu');
+    if (result.recommended && !ikpu.value) {
+      ikpu.value = result.recommended;
+      choice.value = result.recommended;
+      state.ikpuAuto = true;
+    }
+  } catch {
+    choice.replaceChildren(new Option('IKPU qidirib bo‘lmadi (ixtiyoriy)', ''));
+  }
 }
 
 function renderUzumFilters(categoryId) {
@@ -739,6 +781,15 @@ function bindActions() {
   document.querySelector('#seller-notes-edit')?.addEventListener('input', event => { state.notes = event.target.value; markDirty(); });
   document.querySelector('#uzum-template')?.addEventListener('change', event => loadUzumTemplate(event.target.files?.[0]));
   document.querySelector('#uzum-category-search')?.addEventListener('input', event => showUzumCategories(event.target.value));
+  document.querySelector('#uzum-ikpu-query')?.addEventListener('input', event => {
+    clearTimeout(state.ikpuTimer);
+    state.ikpuTimer = setTimeout(() => loadIkpu(event.target.value.trim()), 500);
+  });
+  document.querySelector('#uzum-ikpu-choice')?.addEventListener('change', event => {
+    state.ikpuAuto = false;
+    if (event.target.value) document.querySelector('#uzum-ikpu').value = event.target.value;
+  });
+  document.querySelector('#uzum-ikpu')?.addEventListener('input', () => { state.ikpuAuto = false; });
   document.querySelector('#uzum-export-form')?.addEventListener('submit', publishUzumFile);
   document.addEventListener('keydown', event => {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); if (state.dirty) save(); }

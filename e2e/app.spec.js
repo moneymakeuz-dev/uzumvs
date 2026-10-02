@@ -124,6 +124,9 @@ test('seller completes the card lifecycle', async ({ page, context }) => {
       recommended_category: { id: '12301', title: 'Кружки и чашки', path: 'Товары для дома > Кружки и чашки', score: 0.8 },
     },
   }));
+  await page.route('**/api/cards/*/ikpu*', route => route.fulfill({
+    json: { candidates: [{ code: '06912001043000000', name: 'Кружка керамическая', score: 1 }], recommended: '06912001043000000' },
+  }));
   await page.route('**/api/cards/*/uzum-import-file', route => route.fulfill({
     status: 200,
     contentType: 'application/vnd.ms-excel.sheet.macroEnabled.12',
@@ -135,17 +138,11 @@ test('seller completes the card lifecycle', async ({ page, context }) => {
   await expect(page.locator('#uzum-category-id')).toHaveValue('12301');
   await expect(page.locator('#uzum-category-search')).toHaveValue('Товары для дома > Кружки и чашки');
   await expect(page.locator('#uzum-shop')).toHaveValue('15895');
+  await expect(page.locator('#uzum-ikpu')).toHaveValue('06912001043000000');
   await page.locator('#uzum-brand').fill('Отсутствует бренд');
   await page.locator('#uzum-filters select').selectOption('Керамика');
   await page.locator('#uzum-country').fill('Узбекистан');
-  await page.locator('#uzum-ikpu').fill('1234567890123456');
   await page.locator('#uzum-photo-urls').fill('https://example.com/mug.jpg');
-  await page.locator('#uzum-sale-price').fill('10000');
-  await page.locator('#uzum-list-price').fill('10000');
-  await page.locator('#uzum-weight').fill('300');
-  await page.locator('#uzum-height').fill('100');
-  await page.locator('#uzum-width').fill('80');
-  await page.locator('#uzum-length').fill('80');
   const [uzumFile] = await Promise.all([page.waitForEvent('download'), page.locator('#uzum-download-file').click()]);
   expect(uzumFile.suggestedFilename()).toBe(`uzum-${await page.locator('#card-data').evaluate(el => JSON.parse(el.textContent).id)}.xlsm`);
   await page.getByRole('button', { name: 'Uzum’ga yuborish' }).click();

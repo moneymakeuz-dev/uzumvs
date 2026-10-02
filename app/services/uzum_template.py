@@ -21,6 +21,8 @@ MAX_TEMPLATE_UNCOMPRESSED = 32 * 1024 * 1024
 FILTER_START_COLUMN = 31
 FILTER_COLUMNS = 51
 STOP_WORDS = {"и", "для", "на", "по", "с", "в", "из", "к", "от", "до", "при", "the", "and"}
+DEFAULT_BRANDS = ("Отсутствует бренд",)
+DEFAULT_COUNTRIES = ("Узбекистан", "O'zbekiston", "Uzbekistan")
 PRODUCT_COLUMNS = {
     "title_ru": "A",
     "seller_id": "B",
@@ -197,7 +199,8 @@ def fill_template(data: bytes, values: dict) -> bytes:
                 or any(option not in item["values"] for option in selected)
                 or (not item["multiple"] and len(selected) > 1)):
             raise AppError("uzum_filter_invalid", f"“{item['name']}” filteri uchun ro'yxatdagi qiymatni tanlang.")
-    brand, country = str(values.get("brand", "")), str(values.get("country", ""))
+    brand = str(values.get("brand") or "") or next((name for name in DEFAULT_BRANDS if name in info.brands), "")
+    country = str(values.get("country") or "") or next((name for name in DEFAULT_COUNTRIES if name in info.countries), "")
     if brand not in info.brands:
         raise AppError("uzum_brand_invalid", "Brendni Uzum shablonidagi ro'yxatdan tanlang.")
     if country not in info.countries:
@@ -214,17 +217,17 @@ def fill_template(data: bytes, values: dict) -> bytes:
         raise AppError("uzum_required_field", "Uzum uchun nom, tavsif, SKU guruhi, brend va mamlakatni to'ldiring.")
     if len(title["ru"]) > 90 or len(title["uz"]) > 90 or len(values["sku_group"]) > 100:
         raise AppError("uzum_text_limit", "Uzum nomi 90, SKU guruhi 100 belgidan oshmasligi kerak.")
-    ikpu = str(values.get("ikpu", ""))
-    if not re.fullmatch(r"\d{16}", ikpu):
-        raise AppError("uzum_ikpu_invalid", "IKPU 16 ta raqamdan iborat bo'lishi kerak.")
+    ikpu = str(values.get("ikpu") or "")
+    if ikpu and not re.fullmatch(r"\d{16,17}", ikpu):
+        raise AppError("uzum_ikpu_invalid", "IKPU 16-17 ta raqamdan iborat bo'lishi kerak.")
     photo_urls = values.get("photo_urls") or []
     if not 1 <= len(photo_urls) <= 5 or any(not _is_public_https_url(url) for url in photo_urls):
         raise AppError("uzum_photo_url_invalid", "1-5 ta hammaga ochiq HTTPS rasm havolasini kiriting.")
-    sale_price = _positive_decimal(values.get("sale_price"), "Sotuv narxi")
-    list_price = _positive_decimal(values.get("list_price"), "Eski narx")
-    if list_price < sale_price:
+    sale_price = _positive_decimal(values.get("sale_price"), "Sotuv narxi") if values.get("sale_price") else None
+    list_price = _positive_decimal(values.get("list_price"), "Eski narx") if values.get("list_price") else sale_price
+    if sale_price and list_price < sale_price:
         raise AppError("uzum_price_invalid", "Eski narx sotuv narxidan kichik bo'lmasligi kerak.")
-    numbers = {name: _positive_integer(values.get(name), label) for name, label in (
+    numbers = {name: _positive_integer(values[name], label) if values.get(name) else None for name, label in (
         ("weight_g", "Vazn"), ("height_mm", "Balandlik"), ("width_mm", "En"), ("length_mm", "Uzunlik"),
     )}
     fields = {
@@ -257,7 +260,8 @@ def fill_template(data: bytes, values: dict) -> bytes:
             if selected:
                 _set_cell(main_sheet, f"{column}4", ";".join(selected))
         for name, value in fields.items():
-            _set_cell(main_sheet, f"{PRODUCT_COLUMNS[name]}4", value)
+            if value not in (None, ""):
+                _set_cell(main_sheet, f"{PRODUCT_COLUMNS[name]}4", value)
         ET.register_namespace("", MAIN_NS)
         for prefix, uri in _namespace_declarations(parts[main_path]):
             ET.register_namespace(prefix or "", uri)
