@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import shutil
+import subprocess
 import tempfile
 import time
 from pathlib import Path
@@ -55,25 +56,21 @@ async def _run_script(settings: Settings, mode: str, path: Path, shop_id: str, l
     environment.update({"UZUM_SELLER_EMAIL": email, "UZUM_SELLER_PASSWORD": password, "UZUM_MODE": mode,
                         "UZUM_BROWSER_PROFILE": str(ROOT / "var" / "uzum-browser-profile")})
     async with _browser_lock:
-        process = None
         try:
-            process = await asyncio.create_subprocess_exec(
-                node, str(script), str(path), shop_id,
-                cwd=ROOT, env=environment, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            # Veb-server Windows'da selector event loop ishlatadi, u asyncio subprocess'ni qo'llamaydi.
+            completed = await asyncio.to_thread(
+                subprocess.run, [node, str(script), str(path), shop_id],
+                cwd=ROOT, env=environment, capture_output=True, timeout=limit_seconds, check=False,
             )
-            stdout, _ = await asyncio.wait_for(process.communicate(), timeout=limit_seconds)
-        except TimeoutError:
-            if process and process.returncode is None:
-                process.kill()
-                await process.wait()
+        except subprocess.TimeoutExpired:
             raise AppError("uzum_upload_timeout", "Uzum javobi olinmadi. Kabinetni tekshiring va darhol qayta yubormang.", 504) from None
         except OSError:
             raise AppError("uzum_browser_unavailable", "Playwright brauzerini ishga tushirib bo'lmadi.", 503) from None
     try:
-        result = json.loads(stdout.decode("utf-8").splitlines()[-1])
+        result = json.loads(completed.stdout.decode("utf-8").splitlines()[-1])
     except (UnicodeDecodeError, IndexError, json.JSONDecodeError):
         result = {}
-    return process.returncode, result
+    return completed.returncode, result
 
 
 async def list_shops(settings: Settings) -> list[dict[str, str]]:
