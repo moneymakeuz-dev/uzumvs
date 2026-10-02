@@ -3,6 +3,7 @@ import json
 import os
 import shutil
 import tempfile
+import time
 from pathlib import Path
 
 import httpx
@@ -12,6 +13,67 @@ from app.errors import AppError
 
 SELLER_API = "https://api-seller.uzum.uz/api/seller-openapi/v1/shops"
 UPLOAD_TIMEOUT_SECONDS = 240
+TEMPLATE_TIMEOUT_SECONDS = 240
+TEMPLATE_CACHE = ROOT / "var" / "uzum-template" / "template.xlsm"
+TEMPLATE_MAX_AGE_SECONDS = 24 * 3600
+_browser_lock = asyncio.Lock()
+
+
+async def get_template(settings: Settings) -> bytes:
+    """Uzum kabinetidagi rasmiy shablonni (“Скачать файл”) o'zi yuklab, bir kunga keshlaydi."""
+    if TEMPLATE_CACHE.is_file() and time.time() - TEMPLATE_CACHE.stat().st_mtime < TEMPLATE_MAX_AGE_SECONDS:
+        return TEMPLATE_CACHE.read_bytes()
+    shops = await list_shops(settings)
+    shop_id = settings.uzum_shop_id or shops[0]["id"]
+    TEMPLATE_CACHE.parent.mkdir(parents=True, exist_ok=True)
+    target = TEMPLATE_CACHE.with_suffix(".part")
+    target.unlink(missing_ok=True)
+    returncode, result = await _run_script(settings, "download", target, shop_id, TEMPLATE_TIMEOUT_SECONDS)
+    if returncode != 0 or result.get("status") != "downloaded" or not target.is_file():
+        target.unlink(missing_ok=True)
+        if result.get("code") == "auth_timeout":
+            raise AppError("uzum_auth_timeout", "Uzum kirishi, CAPTCHA yoki SMS tasdig'i vaqtida tugamadi.", 408)
+        if TEMPLATE_CACHE.is_file():
+            return TEMPLATE_CACHE.read_bytes()
+        raise AppError("uzum_template_unavailable", "Uzum shablonini kabinetdan olib bo'lmadi. Faylni qo'lda tanlang.", 502)
+    target.replace(TEMPLATE_CACHE)
+    return TEMPLATE_CACHE.read_bytes()
+
+
+async def _run_script(settings: Settings, mode: str, path: Path, shop_id: str, limit_seconds: int) -> tuple[int, dict]:
+    if settings.app_env == "production":
+        raise AppError("uzum_upload_local_only", "Uzum brauzer yuklashi hozircha faqat lokal ilovada ishlaydi.", 503)
+    email = settings.uzum_seller_email.get_secret_value()
+    password = settings.uzum_seller_password.get_secret_value()
+    if not email or not password:
+        raise AppError("uzum_login_not_configured", "Uzum login va paroli sozlanmagan.", 503)
+    node = shutil.which("node")
+    script = ROOT / "scripts" / "uzum_upload.mjs"
+    if not node or not script.is_file():
+        raise AppError("uzum_browser_unavailable", "Mahalliy Playwright yuklagichi mavjud emas.", 503)
+    environment = os.environ.copy()
+    environment.update({"UZUM_SELLER_EMAIL": email, "UZUM_SELLER_PASSWORD": password, "UZUM_MODE": mode,
+                        "UZUM_BROWSER_PROFILE": str(ROOT / "var" / "uzum-browser-profile")})
+    async with _browser_lock:
+        process = None
+        try:
+            process = await asyncio.create_subprocess_exec(
+                node, str(script), str(path), shop_id,
+                cwd=ROOT, env=environment, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await asyncio.wait_for(process.communicate(), timeout=limit_seconds)
+        except TimeoutError:
+            if process and process.returncode is None:
+                process.kill()
+                await process.wait()
+            raise AppError("uzum_upload_timeout", "Uzum javobi olinmadi. Kabinetni tekshiring va darhol qayta yubormang.", 504) from None
+        except OSError:
+            raise AppError("uzum_browser_unavailable", "Playwright brauzerini ishga tushirib bo'lmadi.", 503) from None
+    try:
+        result = json.loads(stdout.decode("utf-8").splitlines()[-1])
+    except (UnicodeDecodeError, IndexError, json.JSONDecodeError):
+        result = {}
+    return process.returncode, result
 
 
 async def list_shops(settings: Settings) -> list[dict[str, str]]:
@@ -46,37 +108,13 @@ async def upload_template(settings: Settings, data: bytes, shop_id: str) -> dict
     shops = await list_shops(settings)
     if shop_id not in {shop["id"] for shop in shops}:
         raise AppError("uzum_shop_invalid", "Tanlangan do'kon API ro'yxatida topilmadi.", 422)
-    node = shutil.which("node")
-    script = ROOT / "scripts" / "uzum_upload.mjs"
-    if not node or not script.is_file():
-        raise AppError("uzum_browser_unavailable", "Mahalliy Playwright yuklagichi mavjud emas.", 503)
     runtime_dir = ROOT / "var"
     runtime_dir.mkdir(parents=True, exist_ok=True)
-    profile = runtime_dir / "uzum-browser-profile"
     with tempfile.TemporaryDirectory(prefix="uzum-upload-", dir=runtime_dir) as temporary:
         template = Path(temporary) / "product-template.xlsm"
         template.write_bytes(data)
-        environment = os.environ.copy()
-        environment.update({"UZUM_SELLER_EMAIL": email, "UZUM_SELLER_PASSWORD": password,
-                            "UZUM_BROWSER_PROFILE": str(profile)})
-        try:
-            process = await asyncio.create_subprocess_exec(
-                node, str(script), str(template), shop_id,
-                cwd=ROOT, env=environment, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, _ = await asyncio.wait_for(process.communicate(), timeout=UPLOAD_TIMEOUT_SECONDS)
-        except TimeoutError:
-            if "process" in locals() and process.returncode is None:
-                process.kill()
-                await process.wait()
-            raise AppError("uzum_upload_timeout", "Yuklash javobi olinmadi. Uzum kabinetini tekshiring va darhol qayta yubormang.", 504) from None
-        except OSError:
-            raise AppError("uzum_browser_unavailable", "Playwright brauzerini ishga tushirib bo'lmadi.", 503) from None
-        try:
-            result = json.loads(stdout.decode("utf-8").splitlines()[-1])
-        except (UnicodeDecodeError, IndexError, json.JSONDecodeError):
-            result = {}
-        if process.returncode != 0 or result.get("status") != "accepted":
+        returncode, result = await _run_script(settings, "upload", template, shop_id, UPLOAD_TIMEOUT_SECONDS)
+        if returncode != 0 or result.get("status") != "accepted":
             code = result.get("code")
             if code == "auth_timeout":
                 raise AppError("uzum_auth_timeout", "Uzum kirishi, CAPTCHA yoki SMS tasdig'i vaqtida tugamadi.", 408)

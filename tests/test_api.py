@@ -185,6 +185,14 @@ async def test_uzum_template_catalog_and_card_download(database, account, monkey
         assert catalog.json()["recommended_category"]["id"] == "123"
         assert catalog.json()["shops"] == [{"id": "15895", "name": "Test shop"}]
         assert "brands" not in catalog.json()
+
+        async def fake_get_template(_settings):
+            return b"cached-template"
+
+        monkeypatch.setattr(card_routes, "get_template", fake_get_template)
+        auto_catalog = await client.post(f"/api/cards/{card_id}/uzum-template/catalog", data={"auto": "1"})
+        assert auto_catalog.status_code == 200, auto_catalog.text
+        assert auto_catalog.json()["categories"][0]["id"] == "123"
         payload = {
             "expected_version": 1, "category_id": 123, "sku_group": "MUG-1",
             "brand": "No brand", "country": "Uzbekistan", "ikpu": "1234567890123456",

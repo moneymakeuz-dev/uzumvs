@@ -110,9 +110,6 @@ test('seller completes the card lifecycle', async ({ page, context }) => {
 
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'XLSX' }).click()]);
   expect(download.suggestedFilename()).toBe('karto-cards.xlsx');
-  await page.getByRole('button', { name: 'Uzum XLSM' }).click();
-  await expect(page.getByRole('dialog', { name: 'Uzum XLSM tayyorlash' })).toBeVisible();
-  await expect(page.getByLabel('Uzum shabloni (.xlsm)')).toBeVisible();
   await page.route('**/api/cards/*/uzum-template/catalog', route => route.fulfill({
     json: {
       selected_category_id: null,
@@ -132,9 +129,9 @@ test('seller completes the card lifecycle', async ({ page, context }) => {
     contentType: 'application/vnd.ms-excel.sheet.macroEnabled.12',
     body: 'synthetic-xlsm',
   }));
-  await page.locator('#uzum-template').setInputFiles({
-    name: 'template.xlsm', mimeType: 'application/vnd.ms-excel.sheet.macroEnabled.12', buffer: Buffer.from('test'),
-  });
+  await page.getByRole('button', { name: 'Uzum XLSM' }).click();
+  await expect(page.getByRole('dialog', { name: 'Uzum XLSM tayyorlash' })).toBeVisible();
+  await expect(page.getByLabel(/Uzum shabloni/)).toBeVisible();
   await expect(page.locator('#uzum-category-id')).toHaveValue('12301');
   await expect(page.locator('#uzum-category-search')).toHaveValue('Товары для дома > Кружки и чашки');
   await expect(page.locator('#uzum-shop')).toHaveValue('15895');

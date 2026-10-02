@@ -22,7 +22,7 @@ from app.services import cards, exports, jobs, quotas
 from app.services.ikpu import recommended, suggest_ikpu
 from app.services.image_hosting import publish_images
 from app.services.images import MAX_FILE_BYTES, image_path, prepare_image
-from app.services.uzum_seller import list_shops, upload_template
+from app.services.uzum_seller import get_template, list_shops, upload_template
 from app.services.uzum_template import fill_template, inspect_template, recommend_category
 from app.web import current_user, verify_csrf
 
@@ -164,9 +164,9 @@ async def _prepare_uzum_template(request: Request, card_id: UUID, payload_type):
     async with request.form(max_files=1, max_fields=2, max_part_size=1024 * 1024) as form:
         template = form.get("template")
         raw_payload = form.get("payload")
-        if not isinstance(template, UploadFile) or not isinstance(raw_payload, str):
-            raise AppError("uzum_template_required", "Yangi Uzum XLSM shablonini va maydonlarni kiriting.")
-        template_bytes = await read_upload(template)
+        if not isinstance(raw_payload, str):
+            raise AppError("uzum_fields_invalid", "Uzum uchun maydonlarni kiriting.")
+        template_bytes = (await read_upload(template) if isinstance(template, UploadFile) else b"") or None
         try:
             payload = payload_type.model_validate_json(raw_payload)
         except ValueError:
@@ -194,6 +194,8 @@ async def _prepare_uzum_template(request: Request, card_id: UUID, payload_type):
                        "seller_id": str(card.id), "content": content.model_dump()})
     if not photo_urls:
         values["photo_urls"] = await publish_images(image_paths)
+    if template_bytes is None:
+        template_bytes = await get_template(request.app.state.settings)
     data = await asyncio.to_thread(fill_template, template_bytes, values)
     return data, payload
 
@@ -202,11 +204,9 @@ async def _prepare_uzum_template(request: Request, card_id: UUID, payload_type):
 async def uzum_template_catalog(request: Request, card_id: UUID):
     user = current_user(request, verified=True)
     verify_csrf(request)
-    async with request.form(max_files=1, max_fields=0, max_part_size=1024 * 1024) as form:
+    async with request.form(max_files=1, max_fields=1, max_part_size=1024 * 1024) as form:
         template = form.get("template")
-        if not isinstance(template, UploadFile):
-            raise AppError("uzum_template_required", "Yangi Uzum XLSM shablonini yuklang.")
-        template_bytes = await read_upload(template)
+        template_bytes = (await read_upload(template) if isinstance(template, UploadFile) else b"") or None
     async with request.app.state.db.transaction() as session:
         await cards.actor(session, user.id, verified=True)
         card = await cards.owned_card(session, user.id, card_id)
@@ -214,6 +214,8 @@ async def uzum_template_catalog(request: Request, card_id: UUID):
             raise AppError("review_required", "Avval kartochkani tekshirib, saqlang.", 409)
         content = CardContent.model_validate(card.content_json).model_dump()
         seller_notes = card.seller_notes
+    if template_bytes is None:
+        template_bytes = await get_template(request.app.state.settings)
     info = await asyncio.to_thread(inspect_template, template_bytes)
     result = info.to_payload()
     result["recommended_category"] = recommend_category(content, seller_notes, info.categories)

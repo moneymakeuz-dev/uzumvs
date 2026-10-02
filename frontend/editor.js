@@ -494,6 +494,7 @@ async function openUzumExport() {
   document.querySelector('#uzum-brand-options').replaceChildren(new Option('Отсутствует бренд', 'Отсутствует бренд'));
   document.querySelector('#uzum-country-options').replaceChildren();
   document.querySelector('#uzum-export-dialog').showModal();
+  loadUzumTemplate(null);
 }
 
 async function loadUzumTemplate(file) {
@@ -503,16 +504,18 @@ async function loadUzumTemplate(file) {
   state.uzumCatalog = null;
   document.querySelector('#uzum-category-search').disabled = true;
   document.querySelector('#uzum-category-id').value = '';
-  if (!file) return;
-  if (!file.name.toLowerCase().endsWith('.xlsm') || file.size > 10 * 1024 * 1024) {
+  if (file && (!file.name.toLowerCase().endsWith('.xlsm') || file.size > 10 * 1024 * 1024)) {
     toast('Yangi Uzum .xlsm shablonini tanlang (10 MiB gacha).', true);
     return;
   }
   const body = new FormData();
-  body.append('template', file);
+  body.append('auto', file ? '0' : '1');
+  if (file) body.append('template', file);
+  document.querySelector('#uzum-template-category-note').textContent = file ? '' : 'Uzum shabloni kabinetdan olinmoqda (brauzer oynasi ochilishi mumkin)…';
   try {
     state.uzumCatalog = await api(cardUrl('/uzum-template/catalog'), { method: 'POST', body });
-    state.uzumTemplate = file;
+    state.uzumTemplate = file ?? 'auto';
+    document.querySelector('#uzum-template-category-note').textContent = '';
     const shopSelect = document.querySelector('#uzum-shop');
     shopSelect.replaceChildren(new Option('Do‘konni tanlang', ''),
       ...state.uzumCatalog.shops.map(shop => new Option(shop.name, shop.id)));
@@ -535,6 +538,7 @@ async function loadUzumTemplate(file) {
     updateUzumCategoryActions();
     toast('Shablon o‘qildi. Kategoriya va sotuvchi ma’lumotlarini tanlang.');
   } catch (error) {
+    document.querySelector('#uzum-template-category-note').textContent = file ? '' : 'Shablon avtomatik olinmadi. Faylni quyida qo‘lda tanlang.';
     toast(error.message, true);
   }
 }
@@ -662,7 +666,7 @@ function collectUzumPayload() {
 
 function uzumUploadBody(payload) {
   const body = new FormData();
-  body.append('template', state.uzumTemplate);
+  if (state.uzumTemplate instanceof File) body.append('template', state.uzumTemplate);
   body.append('payload', JSON.stringify(payload));
   return body;
 }

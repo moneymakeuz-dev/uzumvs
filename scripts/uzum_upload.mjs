@@ -1,4 +1,4 @@
-import { mkdir } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { chromium } from 'playwright';
 
@@ -23,7 +23,7 @@ try {
   await mkdir(profilePath, { recursive: true });
   context = await chromium.launchPersistentContext(path.resolve(profilePath), {
     headless: false,
-    acceptDownloads: false,
+    acceptDownloads: process.env.UZUM_MODE === 'download',
     viewport: { width: 1440, height: 1000 },
   });
   const page = context.pages()[0] ?? await context.newPage();
@@ -53,6 +53,19 @@ try {
   stage = 'file_dialog';
   const dialog = page.getByRole('dialog');
   await dialog.waitFor({ state: 'visible', timeout: 15_000 });
+  if (process.env.UZUM_MODE === 'download') {
+    stage = 'template_download';
+    const trigger = dialog.getByRole('button', { name: 'Скачать файл' });
+    await trigger.waitFor({ state: 'visible', timeout: 15_000 });
+    const [download] = await Promise.all([page.waitForEvent('download', { timeout: 60_000 }), trigger.click()]);
+    // Uzum yuklashni yopiladigan oynadan boshlaydi, shuning uchun saveAs() o'rniga havola orqali olinadi.
+    const response = await fetch(download.url());
+    if (!response.ok) throw new Error(`template_http_${response.status}`);
+    await writeFile(path.resolve(templatePath), Buffer.from(await response.arrayBuffer()));
+    result('downloaded');
+    await context.close();
+    process.exit(0);
+  }
   const fileInput = dialog.locator('input[type="file"]');
   if (await fileInput.count()) {
     await fileInput.first().setInputFiles(path.resolve(templatePath));
