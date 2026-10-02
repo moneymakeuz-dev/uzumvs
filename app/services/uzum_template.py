@@ -227,7 +227,7 @@ def fill_template(data: bytes, values: dict) -> bytes:
     list_price = _positive_decimal(values.get("list_price"), "Eski narx") if values.get("list_price") else sale_price
     if list_price < sale_price:
         raise AppError("uzum_price_invalid", "Eski narx sotuv narxidan kichik bo'lmasligi kerak.")
-    numbers = {name: _positive_integer(values[name], label) if values.get(name) else None for name, label in (
+    numbers = {name: _positive_integer(values.get(name), label) for name, label in (
         ("weight_g", "Vazn"), ("height_mm", "Balandlik"), ("width_mm", "En"), ("length_mm", "Uzunlik"),
     )}
     fields = {
