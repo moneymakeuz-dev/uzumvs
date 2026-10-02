@@ -7,11 +7,21 @@ from sqlalchemy import select
 from starlette.datastructures import UploadFile
 from starlette.responses import FileResponse, JSONResponse, Response
 
+from app.ai.rules import check_business_rules
 from app.errors import AppError, not_found
 from app.models import CardImage
-from app.schemas import CardPatch, ExportRequest, GenerateRequest
+from app.schemas import (
+    CardContent,
+    CardPatch,
+    ExportRequest,
+    GenerateRequest,
+    UzumPublishRequest,
+    UzumTemplateRequest,
+)
 from app.services import cards, exports, jobs, quotas
 from app.services.images import MAX_FILE_BYTES, image_path, prepare_image
+from app.services.uzum_seller import list_shops, upload_template
+from app.services.uzum_template import fill_template, inspect_template, recommend_category
 from app.web import current_user, verify_csrf
 
 router = APIRouter(prefix="/api")
@@ -129,6 +139,76 @@ async def export(request: Request, payload: ExportRequest):
     data = await asyncio.to_thread(writer, rows)
     mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" if payload.format == "xlsx" else "text/csv; charset=utf-8"
     return Response(data, media_type=mime, headers={"Content-Disposition": f'attachment; filename="karto-cards.{payload.format}"', "Cache-Control": "no-store"})
+
+
+@router.post("/cards/{card_id}/uzum-import-file")
+async def export_uzum_template(request: Request, card_id: UUID):
+    data, _ = await _prepare_uzum_template(request, card_id, UzumTemplateRequest)
+    return Response(data, media_type="application/vnd.ms-excel.sheet.macroEnabled.12",
+                    headers={"Content-Disposition": f'attachment; filename="uzum-{card_id}.xlsm"',
+                             "Cache-Control": "no-store"})
+
+
+@router.post("/cards/{card_id}/uzum-publish")
+async def publish_uzum_template(request: Request, card_id: UUID):
+    data, payload = await _prepare_uzum_template(request, card_id, UzumPublishRequest)
+    result = await upload_template(request.app.state.settings, data, payload.shop_id)
+    return JSONResponse(result, headers={"Cache-Control": "no-store"})
+
+
+async def _prepare_uzum_template(request: Request, card_id: UUID, payload_type):
+    user = current_user(request, verified=True)
+    verify_csrf(request)
+    async with request.form(max_files=1, max_fields=2, max_part_size=1024 * 1024) as form:
+        template = form.get("template")
+        raw_payload = form.get("payload")
+        if not isinstance(template, UploadFile) or not isinstance(raw_payload, str):
+            raise AppError("uzum_template_required", "Yangi Uzum XLSM shablonini va maydonlarni kiriting.")
+        template_bytes = await read_upload(template)
+        try:
+            payload = payload_type.model_validate_json(raw_payload)
+        except ValueError:
+            raise AppError("uzum_fields_invalid", "Uzum uchun kiritilgan maydonlarni tekshiring.") from None
+    async with request.app.state.db.transaction() as session:
+        await cards.actor(session, user.id, verified=True)
+        card = await cards.owned_card(session, user.id, card_id)
+        cards.ensure_version(card, payload.expected_version)
+        await cards.ensure_idle(session, card)
+        if card.status != "ready" or cards.unresolved_reviews(card):
+            raise AppError("review_required", "Uzum faylidan oldin kartochkani tekshirib, saqlang.", 409)
+        content = CardContent.model_validate(card.content_json)
+        try:
+            check_business_rules(content)
+        except ValueError:
+            raise AppError("export_validation", "Kartochkada Uzum qoidalariga mos kelmagan matn bor.", 409) from None
+        values = payload.model_dump()
+        values.update({"category_id": str(payload.category_id), "photo_urls": payload.photo_urls,
+                       "seller_id": str(card.id), "content": content.model_dump()})
+    data = await asyncio.to_thread(fill_template, template_bytes, values)
+    return data, payload
+
+
+@router.post("/cards/{card_id}/uzum-template/catalog")
+async def uzum_template_catalog(request: Request, card_id: UUID):
+    user = current_user(request, verified=True)
+    verify_csrf(request)
+    async with request.form(max_files=1, max_fields=0, max_part_size=1024 * 1024) as form:
+        template = form.get("template")
+        if not isinstance(template, UploadFile):
+            raise AppError("uzum_template_required", "Yangi Uzum XLSM shablonini yuklang.")
+        template_bytes = await read_upload(template)
+    async with request.app.state.db.transaction() as session:
+        await cards.actor(session, user.id, verified=True)
+        card = await cards.owned_card(session, user.id, card_id)
+        if card.status != "ready" or cards.unresolved_reviews(card):
+            raise AppError("review_required", "Avval kartochkani tekshirib, saqlang.", 409)
+        content = CardContent.model_validate(card.content_json).model_dump()
+        seller_notes = card.seller_notes
+    info = await asyncio.to_thread(inspect_template, template_bytes)
+    result = info.to_payload()
+    result["recommended_category"] = recommend_category(content, seller_notes, info.categories)
+    result["shops"] = await list_shops(request.app.state.settings)
+    return JSONResponse(result, headers={"Cache-Control": "no-store"})
 
 
 @router.get("/me/usage")

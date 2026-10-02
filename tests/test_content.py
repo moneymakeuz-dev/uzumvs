@@ -7,7 +7,7 @@ from pydantic import ValidationError
 from app.errors import AppError
 from app.schemas import CardContent, FieldGenerationResult
 from app.security import check_password, csrf_matches, hash_password
-from app.services.images import prepare_image
+from app.services.images import prepare_image, required_free_bytes
 
 
 @pytest.fixture
@@ -53,6 +53,13 @@ def test_password_hash_and_csrf():
     assert not check_password(password, None)
     assert csrf_matches("token", "token")
     assert not csrf_matches("token", "wrong")
+
+
+def test_disk_reserve_scales_with_small_disks_and_is_capped_for_large_ones():
+    gib = 1024 ** 3
+    assert required_free_bytes(500 * 1024 ** 2) == 100 * 1024 ** 2
+    assert required_free_bytes(10 * gib) == gib
+    assert required_free_bytes(237 * gib) == 2 * gib
 
 
 def test_image_is_resized_and_metadata_stripped():

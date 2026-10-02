@@ -203,3 +203,27 @@ class ExportRequest(StrictModel):
         if len(set(self.card_ids)) != len(self.card_ids):
             raise ValueError("Takroriy kartochka tanlangan")
         return self
+
+
+class UzumTemplateRequest(StrictModel):
+    expected_version: int = Field(ge=1)
+    category_id: int = Field(gt=0)
+    sku_group: str = Field(min_length=1, max_length=100)
+    brand: str = Field(min_length=1, max_length=100)
+    country: str = Field(min_length=1, max_length=100)
+    ikpu: str = Field(pattern=r"^\d{16}$")
+    photo_urls: list[str] = Field(min_length=1, max_length=5)
+    sale_price: int = Field(gt=0)
+    list_price: int = Field(gt=0)
+    weight_g: int = Field(gt=0)
+    height_mm: int = Field(gt=0)
+    width_mm: int = Field(gt=0)
+    length_mm: int = Field(gt=0)
+    model: str = Field(default="", max_length=100)
+    barcode: str = Field(default="", max_length=32)
+    color: str = Field(default="", max_length=100)
+    size: str = Field(default="", max_length=100)
+
+
+class UzumPublishRequest(UzumTemplateRequest):
+    shop_id: str = Field(min_length=1, max_length=32)

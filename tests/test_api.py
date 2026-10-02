@@ -1,16 +1,20 @@
 import io
+import json
 from contextlib import asynccontextmanager
 from html.parser import HTMLParser
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
 from PIL import Image
 
+from app.ai.rules import check_business_rules
 from app.clock import utcnow
 from app.main import create_app
-from app.models import User
+from app.models import Card, User
+from app.schemas import CardContent
 from app.security import hash_password
+from app.services.uzum_template import TemplateInfo
 from app.worker import run_once
 
 pytestmark = pytest.mark.integration
@@ -132,3 +136,85 @@ async def test_card_page_and_status_fragment(database, account):
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=application), base_url=settings.app_base_url) as anonymous:
         response = await anonymous.get(f"/cards/{card_id}/status", headers={"HX-Request": "true"})
         assert response.status_code == 401 and response.headers["hx-redirect"] == "/auth/login"
+
+
+async def test_uzum_template_catalog_and_card_download(database, account, monkeypatch):
+    db, settings = database
+    from app.routes import cards as card_routes
+
+    monkeypatch.setattr(
+        card_routes, "inspect_template",
+        lambda _: TemplateInfo({"123": ("Кружки и чашки", "Товары для дома > Кружки и чашки")},
+                       frozenset({"No brand"}), frozenset({"Uzbekistan"}), "123"),
+    )
+    monkeypatch.setattr(card_routes, "fill_template", lambda _template, _values: b"filled-xlsm")
+
+    async def fake_shops(_settings):
+        return [{"id": "15895", "name": "Test shop"}]
+
+    async def fake_upload(_settings, _data, shop_id):
+        return {"status": "accepted", "shop_id": shop_id, "message": "Test accepted"}
+
+    monkeypatch.setattr(card_routes, "list_shops", fake_shops)
+    monkeypatch.setattr(card_routes, "upload_template", fake_upload)
+    async with logged_client(database, account) as client:
+        card_id = await upload(client, settings, "uzum-template")
+        content = CardContent.model_validate({
+            "title": {"ru": "Кружка керамическая белая", "uz": "Oq keramik krujka"},
+            "short_description": {"ru": "Белая керамическая кружка", "uz": "Oq keramik krujka"},
+            "description": {"ru": "Белая керамическая кружка.", "uz": "Oq keramik krujka."},
+            "attributes": [], "suggested_category": {"ru": "Чашки", "uz": "Krujkalar"},
+            "keywords": {"ru": [], "uz": []}, "color": {"ru": None, "uz": None},
+            "material": {"ru": None, "uz": None}, "review_items": [],
+        })
+        check_business_rules(content)
+        async with db.transaction() as session:
+            card = await session.get(Card, UUID(card_id))
+            card.content_json = content.model_dump()
+            card.status = "ready"
+            await session.flush()
+        catalog = await client.post(
+            f"/api/cards/{card_id}/uzum-template/catalog",
+            files={"template": ("official.xlsm", b"template", "application/octet-stream")},
+        )
+        assert catalog.status_code == 200, catalog.text
+        assert catalog.json()["categories"] == [{
+            "id": "123", "title": "Кружки и чашки", "path": "Товары для дома > Кружки и чашки",
+        }]
+        assert catalog.json()["countries"] == ["Uzbekistan"]
+        assert catalog.json()["recommended_category"]["id"] == "123"
+        assert catalog.json()["shops"] == [{"id": "15895", "name": "Test shop"}]
+        assert "brands" not in catalog.json()
+        payload = {
+            "expected_version": 1, "category_id": 123, "sku_group": "MUG-1",
+            "brand": "No brand", "country": "Uzbekistan", "ikpu": "1234567890123456",
+            "photo_urls": ["https://cdn.example.test/mug.jpg"], "sale_price": 10000,
+            "list_price": 10000, "weight_g": 300, "height_mm": 100,
+            "width_mm": 80, "length_mm": 80,
+        }
+        response = await client.post(
+            f"/api/cards/{card_id}/uzum-import-file",
+            data={"payload": json.dumps(payload)},
+            files={"template": ("official.xlsm", b"template", "application/octet-stream")},
+        )
+        assert response.status_code == 200, response.text
+        assert response.content == b"filled-xlsm"
+        assert response.headers["content-type"] == "application/vnd.ms-excel.sheet.macroEnabled.12"
+        assert response.headers["cache-control"] == "no-store"
+
+        publish_payload = {**payload, "expected_version": 1, "shop_id": "15895"}
+        published = await client.post(
+            f"/api/cards/{card_id}/uzum-publish",
+            data={"payload": json.dumps(publish_payload)},
+            files={"template": ("official.xlsm", b"template", "application/octet-stream")},
+        )
+        assert published.status_code == 200, published.text
+        assert published.json() == {"status": "accepted", "shop_id": "15895", "message": "Test accepted"}
+
+        payload["expected_version"] = 999
+        stale = await client.post(
+            f"/api/cards/{card_id}/uzum-import-file",
+            data={"payload": json.dumps(payload)},
+            files={"template": ("official.xlsm", b"template", "application/octet-stream")},
+        )
+        assert stale.status_code == 409

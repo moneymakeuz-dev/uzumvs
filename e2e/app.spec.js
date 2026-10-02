@@ -110,6 +110,47 @@ test('seller completes the card lifecycle', async ({ page, context }) => {
 
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'XLSX' }).click()]);
   expect(download.suggestedFilename()).toBe('karto-cards.xlsx');
+  await page.getByRole('button', { name: 'Uzum XLSM' }).click();
+  await expect(page.getByRole('dialog', { name: 'Uzum XLSM tayyorlash' })).toBeVisible();
+  await expect(page.getByLabel('Uzum shabloni (.xlsm)')).toBeVisible();
+  await page.route('**/api/cards/*/uzum-template/catalog', route => route.fulfill({
+    json: {
+      selected_category_id: '12301',
+      selected_category_path: 'Товары для дома > Кружки и чашки',
+      categories: [{ id: '12301', title: 'Кружки и чашки', path: 'Товары для дома > Кружки и чашки' }],
+      countries: ['Узбекистан'],
+      shops: [{ id: '15895', name: 'Test shop' }],
+      recommended_category: { id: '12301', title: 'Кружки и чашки', path: 'Товары для дома > Кружки и чашки', score: 0.8 },
+    },
+  }));
+  await page.route('**/api/cards/*/uzum-import-file', route => route.fulfill({
+    status: 200,
+    contentType: 'application/vnd.ms-excel.sheet.macroEnabled.12',
+    body: 'synthetic-xlsm',
+  }));
+  await page.locator('#uzum-template').setInputFiles({
+    name: 'template.xlsm', mimeType: 'application/vnd.ms-excel.sheet.macroEnabled.12', buffer: Buffer.from('test'),
+  });
+  await expect(page.locator('#uzum-category-id')).toHaveValue('12301');
+  await expect(page.locator('#uzum-category-search')).toHaveValue('Товары для дома > Кружки и чашки');
+  await expect(page.locator('#uzum-shop')).toHaveValue('15895');
+  await page.locator('#uzum-brand').fill('Отсутствует бренд');
+  await page.locator('#uzum-country').fill('Узбекистан');
+  await page.locator('#uzum-ikpu').fill('1234567890123456');
+  await page.locator('#uzum-photo-urls').fill('https://example.com/mug.jpg');
+  await page.locator('#uzum-sale-price').fill('10000');
+  await page.locator('#uzum-list-price').fill('10000');
+  await page.locator('#uzum-weight').fill('300');
+  await page.locator('#uzum-height').fill('100');
+  await page.locator('#uzum-width').fill('80');
+  await page.locator('#uzum-length').fill('80');
+  const [uzumFile] = await Promise.all([page.waitForEvent('download'), page.locator('#uzum-download-file').click()]);
+  expect(uzumFile.suggestedFilename()).toBe(`uzum-${await page.locator('#card-data').evaluate(el => JSON.parse(el.textContent).id)}.xlsm`);
+  await page.getByRole('button', { name: 'Uzum’ga yuborish' }).click();
+  await expect(page.locator('#confirm-dialog')).toBeVisible();
+  await expect(page.locator('#confirm-message')).toContainText('Test shop');
+  await page.locator('#confirm-dialog button[value="cancel"]').click();
+  await page.getByRole('button', { name: 'Bekor qilish' }).click();
   await noHorizontalOverflow(page);
   await screenshot(page, 'editor-ready');
 

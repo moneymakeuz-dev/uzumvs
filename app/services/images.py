@@ -12,6 +12,8 @@ from app.errors import AppError
 
 MAX_FILE_BYTES = 10 * 1024 * 1024
 MAX_PIXELS = 40_000_000
+MIN_FREE_BYTES = 100 * 1024 * 1024
+MAX_RESERVED_BYTES = 2 * 1024 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -55,12 +57,16 @@ def validate_image(image: Image.Image) -> None:
         raise AppError("image_dimensions", "Animatsiya yoki 40 megapikseldan katta rasm qabul qilinmaydi.", 415)
 
 
+def required_free_bytes(total: int) -> int:
+    return max(MIN_FREE_BYTES, min(total // 10, MAX_RESERVED_BYTES))
+
+
 def write_image(root: Path, image: PreparedImage) -> str:
     key = f"{uuid4().hex}.jpg"
     try:
         root.mkdir(parents=True, exist_ok=True)
         usage = shutil.disk_usage(root)
-        if usage.free < max(100 * 1024 * 1024, usage.total // 10):
+        if usage.free < required_free_bytes(usage.total):
             raise AppError("storage_full", "Fayl xizmati vaqtincha band.", 503)
         with (root / key).open("xb") as destination:
             destination.write(image.data)

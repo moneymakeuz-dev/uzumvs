@@ -201,6 +201,18 @@ dialog { border: 1px solid var(--line); border-radius: 8px; padding: 28px; margi
 dialog::backdrop { background: #10271e66; }
 dialog p { margin: 16px 0 24px; color: var(--muted); font-size: 13px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.uzum-dialog { max-width: 760px; max-height: calc(100dvh - 24px); overflow: auto; }
+.uzum-dialog form { display: grid; gap: 16px; }
+.uzum-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.uzum-dialog-heading h2 { margin: 0; font-size: 20px; }
+.uzum-template-warning { margin: 0; padding: 10px 12px; border-left: 3px solid var(--accent); background: var(--surface); color: var(--ink); }
+.uzum-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.uzum-form-grid label, .uzum-file-field, .uzum-field { display: grid; gap: 6px; min-width: 0; color: var(--ink); font-size: 13px; }
+.uzum-form-grid input, .uzum-file-field input, .uzum-file-field textarea, .uzum-field input { width: 100%; min-width: 0; border: 1px solid var(--line); border-radius: 4px; padding: 10px; background: #fff; color: var(--ink); }
+#uzum-category-options { max-height: 220px; overflow: auto; border: 1px solid var(--line); border-radius: 4px; }
+#uzum-category-options button { display: block; width: 100%; padding: 9px 10px; border: 0; border-bottom: 1px solid var(--line); background: #fff; color: var(--ink); text-align: left; cursor: pointer; }
+#uzum-category-options button:hover { background: var(--surface); }
+@media (max-width: 620px) { .uzum-dialog { padding: 18px; } .uzum-form-grid { grid-template-columns: minmax(0, 1fr); } }
 .error-state { grid-column: 1 / -1; max-width: 620px; text-align: center; margin: auto; padding: 50px 10px; }
 .error-state h1 { font-size: 24px; margin: 18px 0 30px; }
 .error-code { font-size: 70px; color: #b1c7ba; font-weight: 700; }

@@ -22,5 +22,11 @@ def test_unsafe_configuration_is_rejected(values):
 
 
 def test_secrets_are_not_exposed_in_settings_repr():
-    settings = Settings(_env_file=None, gemini_api_key="local-test-value")
-    assert "local-test-value" not in repr(settings)
+    settings = Settings(_env_file=None, gemini_api_key="local-test-value",
+                        uzum_seller_email="seller@example.test", uzum_seller_password="local-password",
+                        uzum_seller_api_key="local-api-key")
+    representation = repr(settings)
+    assert "local-test-value" not in representation
+    assert "seller@example.test" not in representation
+    assert "local-password" not in representation
+    assert "local-api-key" not in representation

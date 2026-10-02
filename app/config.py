@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     smtp_starttls: bool = True
     smtp_use_tls: bool = False
     mail_backend: Literal["file", "smtp"] = "file"
+    uzum_seller_email: SecretStr = SecretStr("")
+    uzum_seller_password: SecretStr = SecretStr("")
+    uzum_seller_api_key: SecretStr = SecretStr("")
     initial_monthly_limit: int = Field(default=20, ge=1)
     regeneration_monthly_limit: int = Field(default=40, ge=1)
     daily_job_limit: int = Field(default=10, ge=1)
