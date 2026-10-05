@@ -208,7 +208,7 @@ class ExportRequest(StrictModel):
 class UzumTemplateRequest(StrictModel):
     expected_version: int = Field(ge=1)
     category_id: int = Field(gt=0)
-    sku_group: str = Field(min_length=1, max_length=100)
+    sku_group: str = Field(default="", max_length=100)
     brand: str = Field(default="", max_length=100)
     country: str = Field(default="", max_length=100)
     ikpu: str = Field(pattern=r"^\d{16,17}$")

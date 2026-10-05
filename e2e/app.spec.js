@@ -131,15 +131,12 @@ test('seller completes the card lifecycle', async ({ page, context }) => {
   }));
   await page.getByRole('button', { name: 'Uzum XLSM' }).click();
   await expect(page.getByRole('dialog', { name: 'Uzum XLSM tayyorlash' })).toBeVisible();
-  await expect(page.getByLabel(/Uzum shabloni/)).toBeVisible();
   await expect(page.locator('#uzum-category-id')).toHaveValue('12301');
   await expect(page.locator('#uzum-category-search')).toHaveValue('Товары для дома > Кружки и чашки');
   await expect(page.locator('#uzum-shop')).toHaveValue('15895');
   await expect(page.locator('#uzum-ikpu')).toHaveValue('06912001043000000');
-  await page.locator('#uzum-brand').fill('Отсутствует бренд');
+  await expect(page.locator('#uzum-brand, #uzum-country, #uzum-photo-urls, #uzum-template')).toHaveCount(0);
   await page.locator('#uzum-filters select').selectOption('Керамика');
-  await page.locator('#uzum-country').fill('Узбекистан');
-  await page.locator('#uzum-photo-urls').fill('https://example.com/mug.jpg');
   await page.locator('#uzum-sale-price').fill('10000');
   await page.locator('#uzum-weight').fill('300');
   await page.locator('#uzum-height').fill('100');

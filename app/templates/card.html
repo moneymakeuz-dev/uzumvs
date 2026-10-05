@@ -38,31 +38,20 @@
   <dialog id="uzum-export-dialog" class="uzum-dialog" aria-labelledby="uzum-export-title">
     <form id="uzum-export-form">
       <div class="uzum-dialog-heading"><h2 id="uzum-export-title">Uzum XLSM tayyorlash</h2><button type="button" class="icon-button" data-action="close-uzum" aria-label="Yopish"><i data-lucide="x"></i></button></div>
-      <label class="uzum-file-field">Uzum shabloni (.xlsm), ixtiyoriy: bo'sh qoldirsangiz Karto uni kabinetdan o'zi oladi<input id="uzum-template" type="file" accept=".xlsm,application/vnd.ms-excel.sheet.macroEnabled.12"></label>
-      <p class="uzum-template-warning" role="note">Faqat rasmiy Uzum shabloni kerak: kategoriya, filtr, IKPU va rasmlar avtomatik topiladi. Qolgan maydonlar ixtiyoriy; bo'sh qoldirilganlarini Uzum kabinetida keyin to'ldirasiz.</p>
-        <small id="uzum-template-category-note" aria-live="polite"></small>
-      <div class="uzum-field"><label for="uzum-shop">Uzum do‘koni</label><select id="uzum-shop" required disabled><option value="">Avval shablonni tanlang</option></select></div>
+      <p class="uzum-template-warning" role="note">Faqat Uzum majburiy maydonlari. Brend, mamlakat, rasm va boshqalarni Karto o'zi qo'yadi; qolganini Uzum kabinetida keyin to'ldirasiz.</p>
+      <small id="uzum-template-category-note" aria-live="polite"></small>
+      <div class="uzum-field"><label for="uzum-shop">Uzum do‘koni</label><select id="uzum-shop" required disabled><option value="">Yuklanmoqda…</option></select></div>
       <div class="uzum-field"><label for="uzum-category-search">Kategoriya</label><input id="uzum-category-search" type="search" autocomplete="off" disabled required aria-autocomplete="list" aria-controls="uzum-category-options"><input id="uzum-category-id" type="hidden"><small id="uzum-category-recommendation" aria-live="polite"></small><div id="uzum-category-options" role="listbox" hidden></div></div>
       <div id="uzum-filters" class="uzum-form-grid" hidden></div>
       <div class="uzum-form-grid">
-        <label>Brend<input id="uzum-brand" list="uzum-brand-options" maxlength="100" placeholder="Bo'sh = Отсутствует бренд"><datalist id="uzum-brand-options"><option value="Отсутствует бренд"></datalist></label>
-        <label>Ishlab chiqarilgan mamlakat<input id="uzum-country" list="uzum-country-options" maxlength="100" placeholder="Bo'sh = Узбекистан"><datalist id="uzum-country-options"></datalist></label>
-        <label>IKPU (Uzum uchun majburiy)<input id="uzum-ikpu" inputmode="numeric" pattern="[0-9]{16,17}" maxlength="17" required></label>
-        <label>IKPU qidirish (nomi bo'yicha)<input id="uzum-ikpu-query" type="search" maxlength="100" autocomplete="off"></label>
+        <label>IKPU<input id="uzum-ikpu" inputmode="numeric" pattern="[0-9]{16,17}" maxlength="17" required></label>
         <label>IKPU tavsiyalari<select id="uzum-ikpu-choice" disabled><option value="">Avval kategoriyani tanlang</option></select></label>
-        <label>SKU guruhi<input id="uzum-sku-group" maxlength="100" required></label>
-        <label>Model<input id="uzum-model" maxlength="100"></label>
-        <label>Shtrixkod<input id="uzum-barcode" maxlength="32"></label>
-        <label>Sotuv narxi (so'm, majburiy)<input id="uzum-sale-price" type="number" min="1" step="1" required></label>
-        <label>Eski narx (bo'sh = sotuv narxi)<input id="uzum-list-price" type="number" min="1" step="1"></label>
-        <label>Vazn (g), majburiy<input id="uzum-weight" type="number" min="1" step="1" required></label>
-        <label>Balandlik (mm), majburiy<input id="uzum-height" type="number" min="1" step="1" required></label>
-        <label>Eni (mm), majburiy<input id="uzum-width" type="number" min="1" step="1" required></label>
-        <label>Uzunligi (mm), majburiy<input id="uzum-length" type="number" min="1" step="1" required></label>
-        <label>Rang<input id="uzum-color" maxlength="100"></label>
-        <label>O'lcham<input id="uzum-size" maxlength="100"></label>
+        <label>Narx (so'm)<input id="uzum-sale-price" type="number" min="1" step="1" required></label>
+        <label>Vazn (g)<input id="uzum-weight" type="number" min="1" step="1" required></label>
+        <label>Balandlik (mm)<input id="uzum-height" type="number" min="1" step="1" required></label>
+        <label>Eni (mm)<input id="uzum-width" type="number" min="1" step="1" required></label>
+        <label>Uzunligi (mm)<input id="uzum-length" type="number" min="1" step="1" required></label>
       </div>
-      <label class="uzum-file-field">Rasm havolalari (ixtiyoriy). Bo'sh qoldirsangiz, Karto rasmlarni o'zi ommaviy hostga yuklaydi<textarea id="uzum-photo-urls" rows="3"></textarea></label>
       <div class="dialog-actions"><button type="button" class="button secondary" data-action="close-uzum">Bekor qilish</button><button id="uzum-download-file" type="button" class="button secondary" data-action="download-uzum-file" disabled><i data-lucide="download"></i>Faqat XLSM olish</button><button id="uzum-export-submit" type="submit" class="button primary" disabled><i data-lucide="upload"></i>Uzum’ga yuborish</button></div>
     </form>
   </dialog>

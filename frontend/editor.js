@@ -488,41 +488,31 @@ async function openUzumExport() {
   document.querySelector('#uzum-export-submit').disabled = true;
   document.querySelector('#uzum-download-file').disabled = true;
   document.querySelector('#uzum-template-category-note').textContent = '';
-  document.querySelector('#uzum-shop').replaceChildren(new Option('Avval shablonni tanlang', ''));
+  document.querySelector('#uzum-shop').replaceChildren(new Option('Yuklanmoqda…', ''));
   document.querySelector('#uzum-shop').disabled = true;
-  document.querySelector('#uzum-sku-group').value = `K${state.card.id.replaceAll('-', '').slice(0, 12)}`;
-  document.querySelector('#uzum-brand-options').replaceChildren(new Option('Отсутствует бренд', 'Отсутствует бренд'));
-  document.querySelector('#uzum-country-options').replaceChildren();
   document.querySelector('#uzum-export-dialog').showModal();
-  loadUzumTemplate(null);
+  loadUzumTemplate();
 }
 
-async function loadUzumTemplate(file) {
+async function loadUzumTemplate() {
   const submit = document.querySelector('#uzum-export-submit');
   submit.disabled = true;
   state.uzumTemplate = null;
   state.uzumCatalog = null;
   document.querySelector('#uzum-category-search').disabled = true;
   document.querySelector('#uzum-category-id').value = '';
-  if (file && (!file.name.toLowerCase().endsWith('.xlsm') || file.size > 10 * 1024 * 1024)) {
-    toast('Yangi Uzum .xlsm shablonini tanlang (10 MiB gacha).', true);
-    return;
-  }
   const body = new FormData();
-  body.append('auto', file ? '0' : '1');
-  if (file) body.append('template', file);
-  document.querySelector('#uzum-template-category-note').textContent = file ? '' : 'Uzum shabloni kabinetdan olinmoqda (brauzer oynasi ochilishi mumkin)…';
+  body.append('auto', '1');
+  document.querySelector('#uzum-template-category-note').textContent = 'Uzum shabloni kabinetdan olinmoqda (brauzer oynasi ochilishi mumkin)…';
   try {
     state.uzumCatalog = await api(cardUrl('/uzum-template/catalog'), { method: 'POST', body });
-    state.uzumTemplate = file ?? 'auto';
+    state.uzumTemplate = 'auto';
     document.querySelector('#uzum-template-category-note').textContent = '';
     const shopSelect = document.querySelector('#uzum-shop');
     shopSelect.replaceChildren(new Option('Do‘konni tanlang', ''),
       ...state.uzumCatalog.shops.map(shop => new Option(shop.name, shop.id)));
     shopSelect.disabled = false;
     if (state.uzumCatalog.shops.length === 1) shopSelect.value = state.uzumCatalog.shops[0].id;
-    const countries = document.querySelector('#uzum-country-options');
-    countries.replaceChildren(...state.uzumCatalog.countries.map(country => new Option(country, country)));
     document.querySelector('#uzum-category-search').disabled = false;
     const recommendation = state.uzumCatalog.recommended_category;
     const categorySearch = document.querySelector('#uzum-category-search');
@@ -538,7 +528,7 @@ async function loadUzumTemplate(file) {
     updateUzumCategoryActions();
     toast('Shablon o‘qildi. Kategoriya va sotuvchi ma’lumotlarini tanlang.');
   } catch (error) {
-    document.querySelector('#uzum-template-category-note').textContent = file ? '' : 'Shablon avtomatik olinmadi. Faylni quyida qo‘lda tanlang.';
+    document.querySelector('#uzum-template-category-note').textContent = 'Shablon olinmadi. Oynani yopib, qayta oching.';
     toast(error.message, true);
   }
 }
@@ -556,7 +546,6 @@ function updateUzumCategoryActions() {
       document.querySelector('#uzum-ikpu').value = '';
       state.ikpuAuto = false;
     }
-    document.querySelector('#uzum-ikpu-query').value = '';
     loadIkpu('');
   }
 }
@@ -576,7 +565,7 @@ async function loadIkpu(query) {
   try {
     const result = await api(cardUrl(`/ikpu?${params}`));
     if (query === '' && state.ikpuCategory !== categoryId) return;
-    choice.replaceChildren(new Option(result.candidates.length ? 'IKPU tanlang' : 'IKPU topilmadi (ixtiyoriy)', ''),
+    choice.replaceChildren(new Option(result.candidates.length ? 'IKPU tanlang' : 'IKPU topilmadi, qo‘lda kiriting', ''),
       ...result.candidates.map(item => new Option(`${item.code} — ${item.name}`, item.code)));
     choice.disabled = !result.candidates.length;
     const ikpu = document.querySelector('#uzum-ikpu');
@@ -586,7 +575,7 @@ async function loadIkpu(query) {
       state.ikpuAuto = true;
     }
   } catch {
-    choice.replaceChildren(new Option('IKPU qidirib bo‘lmadi (ixtiyoriy)', ''));
+    choice.replaceChildren(new Option('IKPU qidirib bo‘lmadi, qo‘lda kiriting', ''));
   }
 }
 
@@ -643,21 +632,12 @@ function collectUzumPayload() {
   return {
     expected_version: state.card.version,
     category_id: Number(categoryId),
-    sku_group: document.querySelector('#uzum-sku-group').value,
-    brand: document.querySelector('#uzum-brand').value,
-    country: document.querySelector('#uzum-country').value,
     ikpu: document.querySelector('#uzum-ikpu').value,
-    photo_urls: document.querySelector('#uzum-photo-urls').value.split(/\r?\n/).map(value => value.trim()).filter(Boolean),
     sale_price: Number(document.querySelector('#uzum-sale-price').value),
-    list_price: Number(document.querySelector('#uzum-list-price').value),
     weight_g: Number(document.querySelector('#uzum-weight').value),
     height_mm: Number(document.querySelector('#uzum-height').value),
     width_mm: Number(document.querySelector('#uzum-width').value),
     length_mm: Number(document.querySelector('#uzum-length').value),
-    model: document.querySelector('#uzum-model').value,
-    barcode: document.querySelector('#uzum-barcode').value,
-    color: document.querySelector('#uzum-color').value,
-    size: document.querySelector('#uzum-size').value,
     filters: Object.fromEntries([...document.querySelectorAll('#uzum-filters select')]
       .map(select => [select.dataset.filterId, [...select.selectedOptions].map(option => option.value).filter(Boolean)])
       .filter(([, values]) => values.length)),
@@ -666,7 +646,6 @@ function collectUzumPayload() {
 
 function uzumUploadBody(payload) {
   const body = new FormData();
-  if (state.uzumTemplate instanceof File) body.append('template', state.uzumTemplate);
   body.append('payload', JSON.stringify(payload));
   return body;
 }
@@ -783,12 +762,7 @@ function bindActions() {
     });
   }));
   document.querySelector('#seller-notes-edit')?.addEventListener('input', event => { state.notes = event.target.value; markDirty(); });
-  document.querySelector('#uzum-template')?.addEventListener('change', event => loadUzumTemplate(event.target.files?.[0]));
   document.querySelector('#uzum-category-search')?.addEventListener('input', event => showUzumCategories(event.target.value));
-  document.querySelector('#uzum-ikpu-query')?.addEventListener('input', event => {
-    clearTimeout(state.ikpuTimer);
-    state.ikpuTimer = setTimeout(() => loadIkpu(event.target.value.trim()), 500);
-  });
   document.querySelector('#uzum-ikpu-choice')?.addEventListener('change', event => {
     state.ikpuAuto = false;
     if (event.target.value) document.querySelector('#uzum-ikpu').value = event.target.value;
