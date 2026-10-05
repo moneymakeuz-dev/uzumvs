@@ -121,6 +121,9 @@ test('seller completes the card lifecycle', async ({ page, context }) => {
       recommended_category: { id: '12301', title: 'Кружки и чашки', path: 'Товары для дома > Кружки и чашки', score: 0.8 },
     },
   }));
+  await page.route('**/api/cards/*/uzum-required*', route => route.fulfill({
+    json: { characteristics: [{ title: 'Цвет', field: 'color' }], defaults: { color: 'Белый' } },
+  }));
   await page.route('**/api/cards/*/ikpu*', route => route.fulfill({
     json: { candidates: [{ code: '06912001043000000', name: 'Кружка керамическая', score: 1 }], recommended: '06912001043000000' },
   }));
@@ -135,6 +138,7 @@ test('seller completes the card lifecycle', async ({ page, context }) => {
   await expect(page.locator('#uzum-category-search')).toHaveValue('Товары для дома > Кружки и чашки');
   await expect(page.locator('#uzum-shop')).toHaveValue('15895');
   await expect(page.locator('#uzum-ikpu')).toHaveValue('06912001043000000');
+  await expect(page.locator('#uzum-color')).toHaveValue('Белый');
   await expect(page.locator('#uzum-brand, #uzum-country, #uzum-photo-urls, #uzum-template')).toHaveCount(0);
   await page.locator('#uzum-filters select').selectOption('Керамика');
   await page.locator('#uzum-sale-price').fill('10000');

@@ -27,6 +27,11 @@ try {
     viewport: { width: 1440, height: 1000 },
   });
   const page = context.pages()[0] ?? await context.newPage();
+  let authorization = null;
+  page.on('request', request => {
+    const header = request.headers().authorization;
+    if (header && new URL(request.url()).hostname === 'api-seller.uzum.uz') authorization = header;
+  });
   stage = 'open_products';
   const productsUrl = `https://seller.uzum.uz/seller/${encodeURIComponent(shopId)}/products/all`;
   await page.goto(productsUrl, { waitUntil: 'domcontentloaded', timeout: 45_000 });
@@ -46,6 +51,20 @@ try {
 
   await page.goto(productsUrl, { waitUntil: 'domcontentloaded', timeout: 45_000 });
   await page.getByText('Мои товары', { exact: true }).waitFor({ state: 'visible', timeout: 60_000 });
+  if (process.env.UZUM_MODE === 'required') {
+    stage = 'required_characteristics';
+    const categoryId = Number(process.env.UZUM_CATEGORY_ID);
+    if (!authorization || !Number.isInteger(categoryId) || categoryId <= 0) throw new Error('no_session_token');
+    const url = `https://api-seller.uzum.uz/api/seller/shop/${encodeURIComponent(shopId)}/product/required-characteristics?categoryId=${categoryId}`;
+    const body = await page.evaluate(async ([target, header]) => {
+      const response = await fetch(target, { headers: { Authorization: header, Accept: 'application/json' } });
+      if (!response.ok) throw new Error(`http_${response.status}`);
+      return response.json();
+    }, [url, authorization]);
+    process.stdout.write(`${JSON.stringify({ status: 'ok', characteristics: body.characteristics ?? [] })}\n`);
+    await context.close();
+    process.exit(0);
+  }
   const createLink = page.getByRole('link', { name: 'Создать карточку товара' });
   stage = 'open_menu';
   await createLink.locator('xpath=..').getByRole('button').last().click();

@@ -17,6 +17,7 @@ UPLOAD_TIMEOUT_SECONDS = 240
 TEMPLATE_TIMEOUT_SECONDS = 240
 TEMPLATE_CACHE = ROOT / "var" / "uzum-template" / "template.xlsm"
 TEMPLATE_MAX_AGE_SECONDS = 24 * 3600
+REQUIRED_CACHE = ROOT / "var" / "uzum-template" / "required-characteristics.json"
 _browser_lock = asyncio.Lock()
 
 
@@ -41,7 +42,31 @@ async def get_template(settings: Settings) -> bytes:
     return TEMPLATE_CACHE.read_bytes()
 
 
-async def _run_script(settings: Settings, mode: str, path: Path, shop_id: str, limit_seconds: int) -> tuple[int, dict]:
+async def required_characteristics(settings: Settings, category_id: int) -> list[dict]:
+    """Kategoriya uchun Uzum majburiy xarakteristikalari (Rang, O'lcham...); shablonda yo'q, kabinet API'sidan olinadi."""
+    cache = json.loads(REQUIRED_CACHE.read_text(encoding="utf-8")) if REQUIRED_CACHE.is_file() else {}
+    entry = cache.get(str(category_id))
+    if entry and time.time() - entry["at"] < TEMPLATE_MAX_AGE_SECONDS:
+        return entry["items"]
+    shop_id = settings.uzum_shop_id or (await list_shops(settings))[0]["id"]
+    returncode, result = await _run_script(settings, "required", REQUIRED_CACHE, shop_id, TEMPLATE_TIMEOUT_SECONDS,
+                                           {"UZUM_CATEGORY_ID": str(category_id)})
+    if returncode != 0 or result.get("status") != "ok":
+        raise AppError("uzum_characteristics_unavailable", "Kategoriya majburiy xarakteristikalarini olib bo'lmadi.", 502)
+    items = []
+    for item in result.get("characteristics") or []:
+        title = (item.get("characteristicTitle") or {}).get("ru") if isinstance(item, dict) else None
+        if item.get("requiredType") == "REQUIRED" and isinstance(title, str):
+            field = "color" if title == "Цвет" else "size" if title.startswith("Размер") else None
+            items.append({"title": title, "field": field})
+    cache[str(category_id)] = {"at": time.time(), "items": items}
+    REQUIRED_CACHE.parent.mkdir(parents=True, exist_ok=True)
+    REQUIRED_CACHE.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
+    return items
+
+
+async def _run_script(settings: Settings, mode: str, path: Path, shop_id: str, limit_seconds: int,
+                      extra_env: dict[str, str] | None = None) -> tuple[int, dict]:
     if settings.app_env == "production":
         raise AppError("uzum_upload_local_only", "Uzum brauzer yuklashi hozircha faqat lokal ilovada ishlaydi.", 503)
     email = settings.uzum_seller_email.get_secret_value()
@@ -54,7 +79,7 @@ async def _run_script(settings: Settings, mode: str, path: Path, shop_id: str, l
         raise AppError("uzum_browser_unavailable", "Mahalliy Playwright yuklagichi mavjud emas.", 503)
     environment = os.environ.copy()
     environment.update({"UZUM_SELLER_EMAIL": email, "UZUM_SELLER_PASSWORD": password, "UZUM_MODE": mode,
-                        "UZUM_BROWSER_PROFILE": str(ROOT / "var" / "uzum-browser-profile")})
+                        "UZUM_BROWSER_PROFILE": str(ROOT / "var" / "uzum-browser-profile"), **(extra_env or {})})
     async with _browser_lock:
         try:
             # Veb-server Windows'da selector event loop ishlatadi, u asyncio subprocess'ni qo'llamaydi.

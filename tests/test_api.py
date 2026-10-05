@@ -193,6 +193,16 @@ async def test_uzum_template_catalog_and_card_download(database, account, monkey
         auto_catalog = await client.post(f"/api/cards/{card_id}/uzum-template/catalog", data={"auto": "1"})
         assert auto_catalog.status_code == 200, auto_catalog.text
         assert auto_catalog.json()["categories"][0]["id"] == "123"
+
+        async def fake_required(_settings, category_id):
+            assert category_id == 123
+            return [{"title": "Цвет", "field": "color"}]
+
+        monkeypatch.setattr(card_routes, "required_characteristics", fake_required)
+        required = await client.get(f"/api/cards/{card_id}/uzum-required?category_id=123")
+        assert required.status_code == 200, required.text
+        assert required.json()["characteristics"] == [{"title": "Цвет", "field": "color"}]
+        assert "color" in required.json()["defaults"]
         payload = {
             "expected_version": 1, "category_id": 123, "sku_group": "MUG-1",
             "brand": "No brand", "country": "Uzbekistan", "ikpu": "1234567890123456",

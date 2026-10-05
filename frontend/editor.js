@@ -480,6 +480,12 @@ async function openUzumExport() {
   state.uzumCatalog = null;
   state.ikpuCategory = '';
   state.ikpuAuto = false;
+  for (const id of ['#uzum-required', '#uzum-filters']) {
+    const box = document.querySelector(id);
+    box.dataset.category = '';
+    box.replaceChildren();
+    box.hidden = true;
+  }
   document.querySelector('#uzum-ikpu-choice').replaceChildren(new Option('Avval kategoriyani tanlang', ''));
   document.querySelector('#uzum-ikpu-choice').disabled = true;
   document.querySelector('#uzum-category-id').value = '';
@@ -540,6 +546,7 @@ function updateUzumCategoryActions() {
   document.querySelector('#uzum-download-file').disabled = !ready;
   document.querySelector('#uzum-template-category-note').textContent = '';
   renderUzumFilters(selectedId);
+  loadUzumRequired(selectedId);
   if (state.ikpuCategory !== selectedId) {
     state.ikpuCategory = selectedId;
     if (state.ikpuAuto) {
@@ -576,6 +583,45 @@ async function loadIkpu(query) {
     }
   } catch {
     choice.replaceChildren(new Option('IKPU qidirib bo‘lmadi, qo‘lda kiriting', ''));
+  }
+}
+
+async function loadUzumRequired(categoryId) {
+  const box = document.querySelector('#uzum-required');
+  if (box.dataset.category === categoryId) return;
+  box.dataset.category = categoryId;
+  box.replaceChildren();
+  box.hidden = true;
+  if (!categoryId) return;
+  const submit = document.querySelector('#uzum-export-submit');
+  submit.disabled = true;
+  box.hidden = false;
+  box.append(element('small', 'quiet', 'Kategoriyaning majburiy xarakteristikalari tekshirilmoqda (brauzer oynasi ochilishi mumkin)…'));
+  try {
+    const result = await api(cardUrl(`/uzum-required?category_id=${encodeURIComponent(categoryId)}`));
+    if (box.dataset.category !== categoryId) return;
+    box.replaceChildren();
+    for (const item of result.characteristics) {
+      if (!item.field) {
+        box.append(element('small', 'quiet', `“${item.title}” majburiy: uni Uzum kabinetida to‘ldiring.`));
+        continue;
+      }
+      const label = document.createElement('label');
+      label.append(item.field === 'color' ? 'Rang' : item.title);
+      const input = document.createElement('input');
+      input.id = `uzum-${item.field}`;
+      input.maxLength = 100;
+      input.required = true;
+      input.value = item.field === 'color' ? result.defaults.color || '' : '';
+      label.append(input);
+      box.append(label);
+    }
+    box.hidden = !box.children.length;
+  } catch (error) {
+    if (box.dataset.category !== categoryId) return;
+    box.replaceChildren(element('small', 'quiet', 'Majburiy xarakteristikalarni tekshirib bo‘lmadi; Uzum xato bersa, kabinetda to‘ldiring.'));
+  } finally {
+    if (box.dataset.category === categoryId) submit.disabled = !state.uzumTemplate;
   }
 }
 
@@ -638,6 +684,8 @@ function collectUzumPayload() {
     height_mm: Number(document.querySelector('#uzum-height').value),
     width_mm: Number(document.querySelector('#uzum-width').value),
     length_mm: Number(document.querySelector('#uzum-length').value),
+    color: document.querySelector('#uzum-color')?.value ?? '',
+    size: document.querySelector('#uzum-size')?.value ?? '',
     filters: Object.fromEntries([...document.querySelectorAll('#uzum-filters select')]
       .map(select => [select.dataset.filterId, [...select.selectedOptions].map(option => option.value).filter(Boolean)])
       .filter(([, values]) => values.length)),

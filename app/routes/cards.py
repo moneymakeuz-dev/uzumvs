@@ -22,7 +22,12 @@ from app.services import cards, exports, jobs, quotas
 from app.services.ikpu import recommended, suggest_ikpu
 from app.services.image_hosting import publish_images
 from app.services.images import MAX_FILE_BYTES, image_path, prepare_image
-from app.services.uzum_seller import get_template, list_shops, upload_template
+from app.services.uzum_seller import (
+    get_template,
+    list_shops,
+    required_characteristics,
+    upload_template,
+)
 from app.services.uzum_template import fill_template, inspect_template, recommend_category
 from app.web import current_user, verify_csrf
 
@@ -192,6 +197,7 @@ async def _prepare_uzum_template(request: Request, card_id: UUID, payload_type):
             image_paths = [image_path(request.app.state.settings.upload_dir, key) for key in keys]
         values.update({"category_id": str(payload.category_id), "photo_urls": photo_urls,
                        "seller_id": card.id.hex, "sku_group": payload.sku_group or f"K{card.id.hex[:12].upper()}",
+                       "color": payload.color or (content.color.ru if content.color else "") or "",
                        "content": content.model_dump()})
     if not photo_urls:
         values["photo_urls"] = await publish_images(image_paths)
@@ -238,6 +244,17 @@ async def uzum_ikpu(request: Request, card_id: UUID, category: str = Query("", m
     candidates = await suggest_ikpu(queries, f"{q} {category} {title} {hint}")
     return JSONResponse({"candidates": candidates, "recommended": None if q.strip() else recommended(candidates)},
                         headers={"Cache-Control": "no-store"})
+
+
+@router.get("/cards/{card_id}/uzum-required")
+async def uzum_required(request: Request, card_id: UUID, category_id: int = Query(..., gt=0)):
+    user = current_user(request, verified=True)
+    async with request.app.state.db.transaction() as session:
+        card = await cards.owned_card(session, user.id, card_id)
+        content = CardContent.model_validate(card.content_json).model_dump() if card.content_json else {}
+    items = await required_characteristics(request.app.state.settings, category_id)
+    color = ((content.get("color") or {}).get("ru")) or ""
+    return JSONResponse({"characteristics": items, "defaults": {"color": color}}, headers={"Cache-Control": "no-store"})
 
 
 @router.get("/me/usage")
