@@ -102,24 +102,32 @@ try {
     result('failed', 'upload_disabled');
     process.exitCode = 1;
   } else {
-    const accepted = page.waitForResponse(response => {
-      const request = response.request();
-      const contentType = request.headers()['content-type'] ?? '';
-      return request.method() === 'POST' && contentType.includes('multipart/form-data')
-        && new URL(response.url()).hostname.endsWith('uzum.uz');
-    }, { timeout: 120_000 });
+    stage = 'await_result';
+    const never = () => new Promise(() => {});
+    const errorText = page.getByText('Не удалось загрузить').first();
     await submit.click();
-    const response = await accepted;
-    if (response.ok()) {
-      const failed = await page.getByText('Не удалось загрузить').first()
-        .waitFor({ state: 'visible', timeout: 20_000 }).then(() => true, () => false);
-      if (failed) {
-        const lines = await page.getByText(/^Строка №/).allInnerTexts();
-        result('failed', 'import_errors', [...new Set(lines.map(line => line.trim()))].slice(0, 10).join('; '));
-        process.exitCode = 1;
-      } else result('accepted');
+    const outcome = await Promise.race([
+      errorText.waitFor({ state: 'visible', timeout: 120_000 }).then(() => 'failed', never),
+      dialog.waitFor({ state: 'hidden', timeout: 120_000 }).then(() => 'closed', never),
+      page.getByText(/успешно|в обработке|принят/i).first()
+        .waitFor({ state: 'visible', timeout: 120_000 }).then(() => 'closed', never),
+      new Promise(resolve => setTimeout(() => resolve('timeout'), 125_000)),
+    ]);
+    // Xato ro'yxati oyna yopilgandan keyin ham chiqishi mumkin.
+    const failed = outcome === 'failed' || (outcome === 'closed'
+      && await errorText.waitFor({ state: 'visible', timeout: 8_000 }).then(() => true, () => false));
+    if (failed) {
+      const lines = await page.getByText(/^Строка №/).allInnerTexts();
+      result('failed', 'import_errors', [...new Set(lines.map(line => line.trim()))].slice(0, 10).join('; '));
+      process.exitCode = 1;
+    } else if (outcome === 'closed') {
+      result('accepted');
     } else {
-      result('failed', 'upload_rejected');
+      if (process.env.UZUM_DEBUG_DIR) {
+        await mkdir(process.env.UZUM_DEBUG_DIR, { recursive: true });
+        await page.screenshot({ path: path.join(process.env.UZUM_DEBUG_DIR, 'unknown_outcome.png') }).catch(() => {});
+      }
+      result('failed', 'unknown_outcome');
       process.exitCode = 1;
     }
   }

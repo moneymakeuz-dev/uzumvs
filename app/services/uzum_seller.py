@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import os
 import shutil
 import subprocess
@@ -19,6 +20,7 @@ TEMPLATE_CACHE = ROOT / "var" / "uzum-template" / "template.xlsm"
 TEMPLATE_MAX_AGE_SECONDS = 24 * 3600
 REQUIRED_CACHE = ROOT / "var" / "uzum-template" / "required-characteristics.json"
 _browser_lock = asyncio.Lock()
+logger = logging.getLogger(__name__)
 
 
 async def get_template(settings: Settings) -> bytes:
@@ -79,7 +81,8 @@ async def _run_script(settings: Settings, mode: str, path: Path, shop_id: str, l
         raise AppError("uzum_browser_unavailable", "Mahalliy Playwright yuklagichi mavjud emas.", 503)
     environment = os.environ.copy()
     environment.update({"UZUM_SELLER_EMAIL": email, "UZUM_SELLER_PASSWORD": password, "UZUM_MODE": mode,
-                        "UZUM_BROWSER_PROFILE": str(ROOT / "var" / "uzum-browser-profile"), **(extra_env or {})})
+                        "UZUM_BROWSER_PROFILE": str(ROOT / "var" / "uzum-browser-profile"),
+                        "UZUM_DEBUG_DIR": str(ROOT / "var" / "uzum-debug"), **(extra_env or {})})
     async with _browser_lock:
         try:
             # Veb-server Windows'da selector event loop ishlatadi, u asyncio subprocess'ni qo'llamaydi.
@@ -95,6 +98,9 @@ async def _run_script(settings: Settings, mode: str, path: Path, shop_id: str, l
         result = json.loads(completed.stdout.decode("utf-8").splitlines()[-1])
     except (UnicodeDecodeError, IndexError, json.JSONDecodeError):
         result = {}
+    if completed.returncode != 0:
+        logger.warning("uzum_script_failed mode=%s code=%s stderr=%s", mode, result.get("code"),
+                       completed.stderr.decode("utf-8", "replace").strip()[:500])
     return completed.returncode, result
 
 
@@ -144,5 +150,8 @@ async def upload_template(settings: Settings, data: bytes, shop_id: str) -> dict
                 raise AppError("uzum_import_errors", f"Uzum faylni rad etdi: {str(result.get('message') or '')[:600]}", 422)
             if code == "upload_rejected":
                 raise AppError("uzum_upload_rejected", "Uzum faylni qabul qilmadi; import oynasidagi xatoni tekshiring.", 422)
+            if code == "unknown_outcome":
+                return {"status": "sent", "shop_id": shop_id,
+                        "message": "Fayl Uzum'ga yuborildi, lekin natija aniqlanmadi. Kabinetdagi \u201c\u041c\u043e\u0438 \u0442\u043e\u0432\u0430\u0440\u044b\u201d ni tekshiring."}
             raise AppError("uzum_upload_failed", "Uzum faylini yuborib bo'lmadi. Kabinetdagi holatni tekshiring.", 502)
         return {"status": "accepted", "shop_id": shop_id, "message": "Uzum faylni qabul qildi; mahsulot importi bir necha daqiqa olishi mumkin."}
