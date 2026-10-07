@@ -30,6 +30,7 @@ async def auth_page(request: Request, action: str):
         return RedirectResponse("/cards/new", status_code=303)
     notices = {"sent": "Manzil mos bo'lsa, tasdiqlash havolasi yuboriladi.",
                "verified": "Email tasdiqlandi. Endi hisobingizga kiring.",
+               "registered": "Hisob tayyor. Endi email va parol bilan kiring.",
                "reset": "Parol yangilandi. Yangi parol bilan kiring."}
     return render_form(request, action, notice=notices.get(request.query_params.get("notice", "")),
                        token=request.query_params.get("token", ""))
@@ -77,6 +78,10 @@ async def register(request: Request):
         limit(request, "register", email)
         async with request.app.state.db.transaction() as session:
             user = await auth.register(session, email, values.get("password", ""))
+            if not request.app.state.settings.email_verification:
+                if user:
+                    user.email_verified_at = utcnow()
+                return RedirectResponse("/auth/login?notice=registered", status_code=303)
             token = await auth.issue_auth_token(session, user, "verify_email") if user else None
     except AppError as error:
         return render_form(request, "register", error.message, error.status)

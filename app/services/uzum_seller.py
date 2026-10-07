@@ -69,8 +69,8 @@ async def required_characteristics(settings: Settings, category_id: int) -> list
 
 async def _run_script(settings: Settings, mode: str, path: Path, shop_id: str, limit_seconds: int,
                       extra_env: dict[str, str] | None = None) -> tuple[int, dict]:
-    if settings.app_env == "production":
-        raise AppError("uzum_upload_local_only", "Uzum brauzer yuklashi hozircha faqat lokal ilovada ishlaydi.", 503)
+    if not settings.uzum_browser:
+        raise AppError("uzum_browser_disabled", "Uzum brauzer yuklashi bu serverda o'chirilgan.", 503)
     email = settings.uzum_seller_email.get_secret_value()
     password = settings.uzum_seller_password.get_secret_value()
     if not email or not password:
@@ -83,11 +83,21 @@ async def _run_script(settings: Settings, mode: str, path: Path, shop_id: str, l
     environment.update({"UZUM_SELLER_EMAIL": email, "UZUM_SELLER_PASSWORD": password, "UZUM_MODE": mode,
                         "UZUM_BROWSER_PROFILE": str(ROOT / "var" / "uzum-browser-profile"),
                         "UZUM_DEBUG_DIR": str(ROOT / "var" / "uzum-debug"), **(extra_env or {})})
+    command = [node, str(script), str(path), shop_id]
+    if os.name != "nt" and not environment.get("DISPLAY"):
+        # Serverda ekran yo'q: ko'rinadigan brauzer virtual displey (Xvfb) ichida ishlaydi.
+        xvfb = shutil.which("xvfb-run")
+        if not xvfb:
+            raise AppError("uzum_browser_unavailable", "Serverda virtual displey (xvfb) o'rnatilmagan.", 503)
+        command = [xvfb, "-a", *command]
+        home = ROOT / "var" / "browser-home"
+        home.mkdir(parents=True, exist_ok=True)
+        environment["HOME"] = str(home)
     async with _browser_lock:
         try:
             # Veb-server Windows'da selector event loop ishlatadi, u asyncio subprocess'ni qo'llamaydi.
             completed = await asyncio.to_thread(
-                subprocess.run, [node, str(script), str(path), shop_id],
+                subprocess.run, command,
                 cwd=ROOT, env=environment, capture_output=True, timeout=limit_seconds, check=False,
             )
         except subprocess.TimeoutExpired:
@@ -127,8 +137,8 @@ async def list_shops(settings: Settings) -> list[dict[str, str]]:
 
 
 async def upload_template(settings: Settings, data: bytes, shop_id: str) -> dict[str, str]:
-    if settings.app_env == "production":
-        raise AppError("uzum_upload_local_only", "Uzum brauzer yuklashi hozircha faqat lokal ilovada ishlaydi.", 503)
+    if not settings.uzum_browser:
+        raise AppError("uzum_browser_disabled", "Uzum brauzer yuklashi bu serverda o'chirilgan.", 503)
     email = settings.uzum_seller_email.get_secret_value()
     password = settings.uzum_seller_password.get_secret_value()
     if not email or not password:

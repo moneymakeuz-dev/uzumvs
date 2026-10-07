@@ -41,6 +41,14 @@ def idempotency_key(request: Request) -> str:
     return key
 
 
+def uzum_user(request: Request):
+    user = current_user(request, verified=True)
+    allowed = {item.strip().casefold() for item in request.app.state.settings.uzum_allowed_emails.split(",") if item.strip()}
+    if allowed and user.email_normalized.casefold() not in allowed:
+        raise AppError("uzum_forbidden", "Uzum do'koniga yuborish faqat do'kon egasiga ruxsat etilgan.", 403)
+    return user
+
+
 async def read_upload(upload: UploadFile) -> bytes:
     output = bytearray()
     while chunk := await upload.read(1024 * 1024):
@@ -164,7 +172,7 @@ async def publish_uzum_template(request: Request, card_id: UUID):
 
 
 async def _prepare_uzum_template(request: Request, card_id: UUID, payload_type):
-    user = current_user(request, verified=True)
+    user = uzum_user(request)
     verify_csrf(request)
     async with request.form(max_files=1, max_fields=2, max_part_size=1024 * 1024) as form:
         template = form.get("template")
@@ -209,7 +217,7 @@ async def _prepare_uzum_template(request: Request, card_id: UUID, payload_type):
 
 @router.post("/cards/{card_id}/uzum-template/catalog")
 async def uzum_template_catalog(request: Request, card_id: UUID):
-    user = current_user(request, verified=True)
+    user = uzum_user(request)
     verify_csrf(request)
     async with request.form(max_files=1, max_fields=1, max_part_size=1024 * 1024) as form:
         template = form.get("template")
@@ -248,7 +256,7 @@ async def uzum_ikpu(request: Request, card_id: UUID, category: str = Query("", m
 
 @router.get("/cards/{card_id}/uzum-required")
 async def uzum_required(request: Request, card_id: UUID, category_id: int = Query(..., gt=0)):
-    user = current_user(request, verified=True)
+    user = uzum_user(request)
     async with request.app.state.db.transaction() as session:
         card = await cards.owned_card(session, user.id, card_id)
         content = CardContent.model_validate(card.content_json).model_dump() if card.content_json else {}

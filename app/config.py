@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     uzum_seller_password: SecretStr = SecretStr("")
     uzum_seller_api_key: SecretStr = SecretStr("")
     uzum_shop_id: str = ""
+    uzum_browser: bool = True
+    uzum_allowed_emails: str = ""
+    email_verification: bool = True
     initial_monthly_limit: int = Field(default=20, ge=1)
     regeneration_monthly_limit: int = Field(default=40, ge=1)
     daily_job_limit: int = Field(default=10, ge=1)
@@ -82,10 +85,10 @@ class Settings(BaseSettings):
         if self.app_env == "production":
             if not self.secure_cookies or self.ai_provider != "gemini":
                 raise ValueError("Production requires HTTPS and Gemini; mock/disabled is not allowed")
-            if self.mail_backend != "smtp" or not self.smtp_host or not self.smtp_from:
+            if self.email_verification and (self.mail_backend != "smtp" or not self.smtp_host or not self.smtp_from):
                 raise ValueError("Production requires configured SMTP")
-            if not self.backup_key.get_secret_value() or not self.backup_bucket:
-                raise ValueError("Production requires encrypted offsite backups")
+            if not self.backup_key.get_secret_value():
+                raise ValueError("Production requires encrypted backups")
         return self
 
 
