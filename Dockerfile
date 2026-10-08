@@ -26,7 +26,7 @@ COPY --from=assets /usr/local/bin/node /usr/local/bin/node
 COPY --from=assets /src/node_modules/playwright /app/node_modules/playwright
 COPY --from=assets /src/node_modules/playwright-core /app/node_modules/playwright-core
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-RUN node /app/node_modules/playwright/cli.js install --with-deps chromium \
+RUN TMPDIR=/tmp node /app/node_modules/playwright/cli.js install --with-deps chromium \
  && apt-get install -y --no-install-recommends xvfb xauth \
  && rm -rf /var/lib/apt/lists/*
 COPY scripts/uzum_upload.mjs scripts/uzum_upload.mjs
