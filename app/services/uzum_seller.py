@@ -19,6 +19,8 @@ TEMPLATE_TIMEOUT_SECONDS = 240
 TEMPLATE_CACHE = ROOT / "var" / "uzum-template" / "template.xlsm"
 TEMPLATE_MAX_AGE_SECONDS = 24 * 3600
 REQUIRED_CACHE = ROOT / "var" / "uzum-template" / "required-characteristics.json"
+# Uzum OpenAPI vaqti-vaqti bilan 503 beradi; oxirgi muvaffaqiyatli do'konlar ro'yxati shu yerda saqlanadi.
+SHOPS_CACHE = ROOT / "var" / "uzum-template" / "shops.json"
 _browser_lock = asyncio.Lock()
 logger = logging.getLogger(__name__)
 
@@ -115,6 +117,23 @@ async def _run_script(settings: Settings, mode: str, path: Path, shop_id: str, l
 
 
 async def list_shops(settings: Settings) -> list[dict[str, str]]:
+    try:
+        shops = await _fetch_shops(settings)
+    except AppError as error:
+        if error.code != "uzum_api_unavailable":
+            raise
+        cached = json.loads(SHOPS_CACHE.read_text(encoding="utf-8")) if SHOPS_CACHE.is_file() else []
+        if cached:
+            return cached
+        if settings.uzum_shop_id:
+            return [{"id": settings.uzum_shop_id, "name": f"Do'kon {settings.uzum_shop_id}"}]
+        raise
+    SHOPS_CACHE.parent.mkdir(parents=True, exist_ok=True)
+    SHOPS_CACHE.write_text(json.dumps(shops, ensure_ascii=False), encoding="utf-8")
+    return shops
+
+
+async def _fetch_shops(settings: Settings) -> list[dict[str, str]]:
     token = settings.uzum_seller_api_key.get_secret_value()
     if not token:
         raise AppError("uzum_api_not_configured", "Uzum API kaliti sozlanmagan.", 503)
