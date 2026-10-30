@@ -1,4 +1,5 @@
 import re
+from datetime import date
 from typing import Annotated, Any, Literal, Self
 from uuid import UUID
 
@@ -228,3 +229,12 @@ class UzumTemplateRequest(StrictModel):
 
 class UzumPublishRequest(UzumTemplateRequest):
     shop_id: str = Field(min_length=1, max_length=32)
+
+
+class TimeslotWatchRequest(StrictModel):
+    shop_id: str = Field(pattern=r"^\d{1,32}$")
+    invoice_id: int = Field(gt=0)
+    invoice_number: str = Field(default="", max_length=64)
+    stock_title: str = Field(default="", max_length=200)
+    date_from: date
+    date_to: date

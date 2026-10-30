@@ -29,7 +29,7 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 RUN TMPDIR=/tmp node /app/node_modules/playwright/cli.js install --with-deps chromium \
  && apt-get install -y --no-install-recommends xvfb xauth \
  && rm -rf /var/lib/apt/lists/*
-COPY scripts/uzum_upload.mjs scripts/uzum_upload.mjs
+COPY scripts/uzum_upload.mjs scripts/uzum_timeslots.mjs scripts/
 COPY alembic.ini ./
 COPY migrations migrations
 COPY app app

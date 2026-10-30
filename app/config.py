@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     uzum_shop_id: str = ""
     uzum_browser: bool = True
     uzum_allowed_emails: str = ""
+    uzum_timeslot_watch: bool = True
+    uzum_timeslot_interval_seconds: int = Field(default=180, ge=60, le=3600)
+    uzum_timeslot_min_lead_hours: int = Field(default=48, ge=24, le=336)
+    uzum_timeslot_dry_run: bool = False
     email_verification: bool = True
     initial_monthly_limit: int = Field(default=20, ge=1)
     regeneration_monthly_limit: int = Field(default=40, ge=1)

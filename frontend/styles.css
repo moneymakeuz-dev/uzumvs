@@ -213,6 +213,21 @@ dialog p { margin: 16px 0 24px; color: var(--muted); font-size: 13px; }
 #uzum-category-options button { display: block; width: 100%; padding: 9px 10px; border: 0; border-bottom: 1px solid var(--line); background: #fff; color: var(--ink); text-align: left; cursor: pointer; }
 #uzum-category-options button:hover { background: var(--surface); }
 @media (max-width: 620px) { .uzum-dialog { padding: 18px; } .uzum-form-grid { grid-template-columns: minmax(0, 1fr); } }
+.timeslot-panel { display: grid; gap: 16px; margin-bottom: 20px; padding: 22px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); }
+.timeslot-form { display: grid; gap: 14px; max-width: 760px; }
+.timeslot-invoice-row { display: flex; gap: 10px; }
+.timeslot-invoice-row select { flex: 1; }
+#timeslot-invoice-note { color: var(--muted); font-size: 12px; }
+.watch-list { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.watch-item { display: grid; gap: 10px; padding: 16px; border: 1px solid var(--line); border-radius: 6px; }
+.watch-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.watch-meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0; }
+.watch-meta dt { color: var(--muted); font-size: 11px; }
+.watch-meta dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.watch-message { color: var(--muted); font-size: 13px; }
+.watch-item .button { justify-self: start; }
+.timeslot-panel .empty-state { min-height: 200px; padding: 40px 20px; }
+@media (max-width: 767px) { .timeslot-panel { padding: 16px; } .timeslot-invoice-row { flex-direction: column; } .watch-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .error-state { grid-column: 1 / -1; max-width: 620px; text-align: center; margin: auto; padding: 50px 10px; }
 .error-state h1 { font-size: 24px; margin: 18px 0 30px; }
 .error-code { font-size: 70px; color: #b1c7ba; font-weight: 700; }

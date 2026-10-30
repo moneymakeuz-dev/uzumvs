@@ -1,6 +1,7 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { chromium } from 'playwright';
+import { checkTimeslots, listInvoices } from './uzum_timeslots.mjs';
 
 const [templatePath, shopId] = process.argv.slice(2);
 const email = process.env.UZUM_SELLER_EMAIL;
@@ -62,6 +63,26 @@ try {
       return response.json();
     }, [url, authorization]);
     process.stdout.write(`${JSON.stringify({ status: 'ok', characteristics: body.characteristics ?? [] })}\n`);
+    await context.close();
+    process.exit(0);
+  }
+  if (process.env.UZUM_MODE === 'invoices' || process.env.UZUM_MODE === 'timeslots') {
+    stage = process.env.UZUM_MODE;
+    if (!authorization) throw new Error('no_session_token');
+    const call = (method, url, body) => page.evaluate(async ([target, header, verb, payload]) => {
+      const headers = { Authorization: header, Accept: 'application/json' };
+      if (payload !== null) headers['Content-Type'] = 'application/json';
+      const response = await fetch(target, { method: verb, headers, body: payload === null ? undefined : JSON.stringify(payload) });
+      return { ok: response.ok, status: response.status, json: await response.json().catch(() => null) };
+    }, [url, authorization, method, body ?? null]);
+    if (process.env.UZUM_MODE === 'invoices') {
+      process.stdout.write(`${JSON.stringify({ status: 'ok', invoices: await listInvoices(call, shopId) })}\n`);
+    } else {
+      // Bu rejimda birinchi argument — kuzatuv vazifalari yozilgan JSON fayl.
+      const { tasks, minLeadHours } = JSON.parse(await readFile(path.resolve(templatePath), 'utf8'));
+      const results = await checkTimeslots(call, shopId, tasks, { minLeadMs: minLeadHours * 3600_000, dryRun });
+      process.stdout.write(`${JSON.stringify({ status: 'ok', results })}\n`);
+    }
     await context.close();
     process.exit(0);
   }
@@ -137,8 +158,10 @@ try {
     await mkdir(process.env.UZUM_DEBUG_DIR, { recursive: true });
     await page?.screenshot({ path: path.join(process.env.UZUM_DEBUG_DIR, `${stage}.png`) }).catch(() => {});
   }
-  process.stderr.write(`stage=${stage} ${String(error?.message ?? error).split('\n')[0]}\n`);
-  result('failed', stage === 'login' || stage === 'open_products' ? 'auth_timeout' : 'ui_changed');
+  const reason = String(error?.message ?? error).split('\n')[0];
+  process.stderr.write(`stage=${stage} ${reason}\n`);
+  if (stage === 'invoices' || stage === 'timeslots') result('failed', 'api_error', reason.slice(0, 200));
+  else result('failed', stage === 'login' || stage === 'open_products' ? 'auth_timeout' : 'ui_changed');
   process.exitCode = 1;
 } finally {
   if (context) await context.close();

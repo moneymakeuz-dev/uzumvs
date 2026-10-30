@@ -29,7 +29,7 @@ from app.services.uzum_seller import (
     upload_template,
 )
 from app.services.uzum_template import fill_template, inspect_template, recommend_category
-from app.web import current_user, verify_csrf
+from app.web import current_user, uzum_user, verify_csrf
 
 router = APIRouter(prefix="/api")
 
@@ -39,14 +39,6 @@ def idempotency_key(request: Request) -> str:
     if not re.fullmatch(r"[a-zA-Z0-9_-]{1,80}", key):
         raise AppError("idempotency_required", "So'rov kaliti yo'q. Sahifani yangilang.")
     return key
-
-
-def uzum_user(request: Request):
-    user = current_user(request, verified=True)
-    allowed = {item.strip().casefold() for item in request.app.state.settings.uzum_allowed_emails.split(",") if item.strip()}
-    if allowed and user.email_normalized.casefold() not in allowed:
-        raise AppError("uzum_forbidden", "Uzum do'koniga yuborish faqat do'kon egasiga ruxsat etilgan.", 403)
-    return user
 
 
 async def read_upload(upload: UploadFile) -> bytes:

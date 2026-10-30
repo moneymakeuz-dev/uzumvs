@@ -15,9 +15,23 @@ templates = Jinja2Templates(directory=str(ROOT / "app" / "templates"))
 
 def context(request: Request, **values: Any) -> dict[str, Any]:
     identity: Identity | None = getattr(request.state, "identity", None)
-    return {"request": request, "user": identity.user if identity else None,
+    user = identity.user if identity else None
+    return {"request": request, "user": user,
             "csrf": identity.csrf if identity else "", "settings": request.app.state.settings,
+            "uzum_access": bool(user and uzum_allowed(request.app.state.settings, user)),
             "active_page": "", **values}
+
+
+def uzum_allowed(settings: Settings, user: User) -> bool:
+    allowed = {item.strip().casefold() for item in settings.uzum_allowed_emails.split(",") if item.strip()}
+    return bool(user.email_verified_at) and (not allowed or user.email_normalized.casefold() in allowed)
+
+
+def uzum_user(request: Request) -> User:
+    user = current_user(request, verified=True)
+    if not uzum_allowed(request.app.state.settings, user):
+        raise AppError("uzum_forbidden", "Uzum do'koniga yuborish faqat do'kon egasiga ruxsat etilgan.", 403)
+    return user
 
 
 def current_user(request: Request, verified: bool = False) -> User:

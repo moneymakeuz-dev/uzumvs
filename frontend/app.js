@@ -4,14 +4,15 @@ import { initUpload } from './upload.js';
 import { bindHistoryActions, initHistory } from './history.js';
 import { initProfile } from './profile.js';
 import { initEditor } from './editor.js';
+import { initTimeslots } from './timeslots.js';
 
 window.htmx = htmx;
 htmx.config.allowEval = false;
 htmx.config.includeIndicatorStyles = false;
-const backgroundRequest = event => event.detail.elt?.id === 'job-status';
+const backgroundRequest = event => ['job-status', 'timeslot-watches'].includes(event.detail.elt?.id);
 
 function start() {
-  icons(); initUpload(); initHistory(); bindHistoryActions(); initProfile(); initEditor();
+  icons(); initUpload(); initHistory(); bindHistoryActions(); initProfile(); initEditor(); initTimeslots();
   document.body.addEventListener('htmx:configRequest', event => {
     event.detail.headers['X-CSRF-Token'] = document.querySelector('meta[name="csrf-token"]').content;
   });

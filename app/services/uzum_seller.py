@@ -34,7 +34,7 @@ async def get_template(settings: Settings) -> bytes:
     TEMPLATE_CACHE.parent.mkdir(parents=True, exist_ok=True)
     target = TEMPLATE_CACHE.with_suffix(".part")
     target.unlink(missing_ok=True)
-    returncode, result = await _run_script(settings, "download", target, shop_id, TEMPLATE_TIMEOUT_SECONDS)
+    returncode, result = await run_script(settings, "download", target, shop_id, TEMPLATE_TIMEOUT_SECONDS)
     if returncode != 0 or result.get("status") != "downloaded" or not target.is_file():
         target.unlink(missing_ok=True)
         if result.get("code") == "auth_timeout":
@@ -53,8 +53,8 @@ async def required_characteristics(settings: Settings, category_id: int) -> list
     if entry and time.time() - entry["at"] < TEMPLATE_MAX_AGE_SECONDS:
         return entry["items"]
     shop_id = settings.uzum_shop_id or (await list_shops(settings))[0]["id"]
-    returncode, result = await _run_script(settings, "required", REQUIRED_CACHE, shop_id, TEMPLATE_TIMEOUT_SECONDS,
-                                           {"UZUM_CATEGORY_ID": str(category_id)})
+    returncode, result = await run_script(settings, "required", REQUIRED_CACHE, shop_id, TEMPLATE_TIMEOUT_SECONDS,
+                                          {"UZUM_CATEGORY_ID": str(category_id)})
     if returncode != 0 or result.get("status") != "ok":
         raise AppError("uzum_characteristics_unavailable", "Kategoriya majburiy xarakteristikalarini olib bo'lmadi.", 502)
     items = []
@@ -69,7 +69,7 @@ async def required_characteristics(settings: Settings, category_id: int) -> list
     return items
 
 
-async def _run_script(settings: Settings, mode: str, path: Path, shop_id: str, limit_seconds: int,
+async def run_script(settings: Settings, mode: str, path: Path, shop_id: str, limit_seconds: int,
                       extra_env: dict[str, str] | None = None) -> tuple[int, dict]:
     if not settings.uzum_browser:
         raise AppError("uzum_browser_disabled", "Uzum brauzer yuklashi bu serverda o'chirilgan.", 503)
@@ -170,7 +170,7 @@ async def upload_template(settings: Settings, data: bytes, shop_id: str) -> dict
     with tempfile.TemporaryDirectory(prefix="uzum-upload-", dir=runtime_dir) as temporary:
         template = Path(temporary) / "product-template.xlsm"
         template.write_bytes(data)
-        returncode, result = await _run_script(settings, "upload", template, shop_id, UPLOAD_TIMEOUT_SECONDS)
+        returncode, result = await run_script(settings, "upload", template, shop_id, UPLOAD_TIMEOUT_SECONDS)
         if returncode != 0 or result.get("status") != "accepted":
             code = result.get("code")
             if code == "auth_timeout":

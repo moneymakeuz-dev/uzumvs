@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block workspace_content %}
+<div class="page-heading"><div><div class="eyebrow">UZUM · YUK XATLARI</div><h1>Timeslot kuzatuvi</h1><p>Tanlangan sanalarda slot bo'shasa, yuk xati avtomatik o'sha slotga ko'chiriladi. Tekshiruv har {{ interval_label }}da.</p></div><button type="button" class="button secondary" data-action="check-timeslots"><i data-lucide="refresh-cw"></i>Hozir tekshirish</button></div>
+<div class="notice warning" role="note"><i data-lucide="info"></i><span>Uzum qoidasi: timeslot faqat «Создана» holatidagi yuk xatida va ko'pi bilan 2 marta o'zgaradi. Har kuzatuv yuk xatini faqat bir marta ko'chiradi. Joriy slotgacha {{ settings.uzum_timeslot_min_lead_hours }} soatdan kam qolsa, jarimadan saqlanish uchun kuzatuv to'xtaydi.{% if settings.uzum_timeslot_dry_run %} <strong>Sinov rejimi yoqilgan: slot o'zgartirilmaydi.</strong>{% endif %}</span></div>
+<section class="timeslot-panel" aria-labelledby="timeslot-form-title">
+  <h2 id="timeslot-form-title">Yangi kuzatuv</h2>
+  <form id="timeslot-form" class="timeslot-form">
+    <div class="uzum-field"><label for="timeslot-shop">Uzum do‘koni</label><select id="timeslot-shop" required disabled><option value="">Yuklanmoqda…</option></select></div>
+    <div class="uzum-field"><label for="timeslot-invoice">Yuk xati</label><div class="timeslot-invoice-row"><select id="timeslot-invoice" required disabled><option value="">Avval yuk xatlarini yuklang</option></select><button type="button" class="button secondary" data-action="load-invoices" disabled><i data-lucide="download"></i>Yuklash</button></div><small id="timeslot-invoice-note" aria-live="polite"></small></div>
+    <div class="uzum-form-grid">
+      <label>Sanadan<input id="timeslot-date-from" type="date" required></label>
+      <label>Sanagacha<input id="timeslot-date-to" type="date" required></label>
+    </div>
+    <div class="dialog-actions"><button type="submit" class="button primary" disabled><i data-lucide="calendar-clock"></i>Kuzatuvni boshlash</button></div>
+  </form>
+</section>
+<section id="timeslot-watches" class="timeslot-panel" aria-labelledby="timeslot-list-title" {% if has_active %}hx-get="/timeslots" hx-trigger="every 20s" hx-select="#timeslot-watches" hx-target="this" hx-swap="outerHTML"{% endif %}>
+  <h2 id="timeslot-list-title">Kuzatuvlar</h2>
+  {% if watches %}
+  <ul class="watch-list">{% for watch in watches %}
+    {% set badge = {'active': ('queued', 'Kuzatilmoqda'), 'done': ('ready', 'Bajarildi'), 'failed': ('failed', "To'xtadi"), 'cancelled': ('', 'Bekor qilingan')}[watch.status] %}
+    <li class="watch-item">
+      <div class="watch-heading"><h3>Yuk xati {{ watch.invoice_number }}</h3><span class="badge {{ badge[0] }}">{{ badge[1] }}</span></div>
+      <dl class="watch-meta">
+        <div><dt>Ombor</dt><dd>{{ watch.stock_title or '—' }}</dd></div>
+        <div><dt>Joriy slot</dt><dd>{{ watch.current_slot or '—' }}</dd></div>
+        <div><dt>Kerakli sana</dt><dd>{{ watch.dates }}</dd></div>
+        <div><dt>Oxirgi tekshiruv</dt><dd>{{ watch.last_checked_at or '—' }}</dd></div>
+      </dl>
+      <p class="watch-message">{{ watch.message }}</p>
+      {% if watch.status == 'active' %}<button type="button" class="button secondary" data-cancel-watch="{{ watch.id }}"><i data-lucide="x"></i>Bekor qilish</button>{% endif %}
+    </li>{% endfor %}</ul>
+  {% else %}<div class="empty-state"><i data-lucide="calendar-clock"></i><h2>Hali kuzatuv yo'q</h2></div>{% endif %}
+</section>
+{% endblock %}

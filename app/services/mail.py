@@ -24,8 +24,24 @@ def auth_message(settings: Settings, email: str, token: str, purpose: str) -> Em
     return message
 
 
+def notice_message(settings: Settings, email: str, subject: str, body: str) -> EmailMessage:
+    message = EmailMessage()
+    message["To"] = email
+    message["From"] = settings.smtp_from or "Karto <no-reply@localhost>"
+    message["Subject"] = f"Karto: {subject}"
+    message.set_content(body)
+    return message
+
+
 async def send_auth_link(settings: Settings, email: str, token: str, purpose: str) -> None:
-    message = auth_message(settings, email, token, purpose)
+    await deliver(settings, auth_message(settings, email, token, purpose))
+
+
+async def send_notice(settings: Settings, email: str, subject: str, body: str) -> None:
+    await deliver(settings, notice_message(settings, email, subject, body))
+
+
+async def deliver(settings: Settings, message: EmailMessage) -> None:
     try:
         if settings.mail_backend == "file":
             await asyncio.to_thread(store_local_message, settings, message)
