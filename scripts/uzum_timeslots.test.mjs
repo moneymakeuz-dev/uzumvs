@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { blocker, checkTimeslots, pickSlot, tashkentDate } from './uzum_timeslots.mjs';
+import { blocker, checkTimeslots, pickSlot, tashkentDate, withReauth } from './uzum_timeslots.mjs';
 
 const HOUR = 3600_000;
 const at = iso => Date.parse(iso);
@@ -90,6 +90,39 @@ test('slotni boshqa sotuvchi olib qo\'ysa missed, sinov rejimida set chaqirilmay
   const [second] = await checkTimeslots(dry.call, '77', [task], { minLeadMs: 48 * HOUR, dryRun: true, now: () => NOW });
   assert.equal(second.outcome, 'dry_run');
   assert.ok(!dry.state.calls.some(item => item.url.endsWith('/time-slot/set')));
+});
+
+test('set 401 qaytarsa token yangilanib, slot shu tekshiruvning o\'zida band qilinadi', async () => {
+  const slot = at('2026-11-03T09:00:00Z');
+  const unauthorized = { ok: false, status: 401, json: { errors: [{ code: 'unauthorized-001' }] } };
+  const cabinet = fakeCabinet([{ timeFrom: slot }]);
+  let refreshes = 0;
+  let rejected = false;
+  const send = async (method, url, body) => {
+    if (url.endsWith('/time-slot/set') && !rejected) {
+      rejected = true;
+      cabinet.state.calls.push({ method, url, body });
+      return unauthorized;
+    }
+    return cabinet.call(method, url, body);
+  };
+  const call = withReauth(send, async () => { refreshes += 1; });
+  const [result] = await checkTimeslots(call, '77', [task], { minLeadMs: 48 * HOUR, now: () => NOW });
+  assert.equal(result.outcome, 'changed');
+  assert.equal(refreshes, 1);
+  assert.equal(cabinet.state.calls.filter(item => item.url.endsWith('/time-slot/set')).length, 2);
+});
+
+test('token yangilash faqat 401 da va cheklangan marta bajariladi', async () => {
+  let refreshes = 0;
+  const statuses = [];
+  const send = async () => ({ ok: false, status: statuses.shift() ?? 401, json: null });
+  const call = withReauth(send, async () => { refreshes += 1; });
+  statuses.push(400);
+  assert.equal((await call('GET', 'x')).status, 400);
+  assert.equal(refreshes, 0);
+  for (let i = 0; i < 4; i += 1) assert.equal((await call('GET', 'x')).status, 401);
+  assert.equal(refreshes, 2);
 });
 
 test('bitta yuk xatidagi xato boshqalarini to\'xtatmaydi', async () => {

@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { chromium } from 'playwright';
-import { checkTimeslots, listInvoices } from './uzum_timeslots.mjs';
+import { checkTimeslots, listInvoices, withReauth } from './uzum_timeslots.mjs';
 
 const [templatePath, shopId] = process.argv.slice(2);
 const email = process.env.UZUM_SELLER_EMAIL;
@@ -69,12 +69,24 @@ try {
   if (process.env.UZUM_MODE === 'invoices' || process.env.UZUM_MODE === 'timeslots') {
     stage = process.env.UZUM_MODE;
     if (!authorization) throw new Error('no_session_token');
-    const call = (method, url, body) => page.evaluate(async ([target, header, verb, payload]) => {
+    const send = (method, url, body) => page.evaluate(async ([target, header, verb, payload]) => {
       const headers = { Authorization: header, Accept: 'application/json' };
       if (payload !== null) headers['Content-Type'] = 'application/json';
       const response = await fetch(target, { method: verb, headers, body: payload === null ? undefined : JSON.stringify(payload) });
       return { ok: response.ok, status: response.status, json: await response.json().catch(() => null) };
     }, [url, authorization, method, body ?? null]);
+    // Sahifani qayta ochganda kabinet tokenni tekshirib yangilaydi, yuqoridagi listener yangisini ushlaydi.
+    const refresh = async () => {
+      const stale = authorization;
+      const fresh = page.waitForRequest(request => {
+        const header = request.headers().authorization;
+        return Boolean(header) && header !== stale && new URL(request.url()).hostname === 'api-seller.uzum.uz';
+      }, { timeout: 15_000 }).catch(() => null);
+      await page.goto(productsUrl, { waitUntil: 'domcontentloaded', timeout: 45_000 });
+      await page.getByText('Мои товары', { exact: true }).waitFor({ state: 'visible', timeout: 60_000 });
+      await fresh;
+    };
+    const call = withReauth(send, refresh);
     if (process.env.UZUM_MODE === 'invoices') {
       process.stdout.write(`${JSON.stringify({ status: 'ok', invoices: await listInvoices(call, shopId) })}\n`);
     } else {

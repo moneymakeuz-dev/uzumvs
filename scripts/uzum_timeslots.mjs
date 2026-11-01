@@ -4,6 +4,7 @@
 const API = 'https://api-seller.uzum.uz/api/seller/shop';
 const TASHKENT_OFFSET_MS = 5 * 3600_000;
 const PAGE_SIZE = 20;
+const MAX_REAUTH = 2;
 
 export function toMs(value) {
   const ms = typeof value === 'number' ? value : typeof value === 'string' ? Date.parse(value) : Number.NaN;
@@ -56,6 +57,20 @@ function earliest(slots) {
 
 function errorCode(json) {
   return json?.errors?.[0]?.code ?? json?.error?.code ?? json?.code ?? null;
+}
+
+// 401 (unauthorized-001) da Uzum so'rovni bajarmaydi: sessiya tokenini yangilab, so'rov darhol bir marta
+// qaytariladi — aks holda bo'shagan slot keyingi tekshiruvgacha boshqa sotuvchiga ketishi mumkin.
+// Token yangilash bitta ishga tushishda ko'pi bilan MAX_REAUTH marta (skript vaqt limitiga sig'ishi uchun).
+export function withReauth(send, refresh) {
+  let left = MAX_REAUTH;
+  return async (method, url, body) => {
+    const response = await send(method, url, body);
+    if (response.status !== 401 || left === 0) return response;
+    left -= 1;
+    await refresh();
+    return send(method, url, body);
+  };
 }
 
 // call(method, url, body) -> { ok, status, json }; brauzer sessiyasi tokeni bilan bajariladi.
