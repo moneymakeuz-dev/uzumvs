@@ -6,8 +6,8 @@ from fastapi import APIRouter, Query, Request
 from starlette.responses import RedirectResponse
 
 from app.errors import AppError
-from app.services import cards, quotas, uzum_timeslots
-from app.web import context, current_user, templates, uzum_user
+from app.services import cards, quotas, uzum_accounts, uzum_timeslots
+from app.web import context, current_user, templates
 
 router = APIRouter()
 JOB_LABELS = {"queued": "Navbatda", "running": "Yaratilmoqda", "succeeded": "Tayyor",
@@ -101,20 +101,25 @@ async def card_status(request: Request, card_id: UUID):
 
 @router.get("/timeslots")
 async def timeslots(request: Request):
-    user = uzum_user(request)
+    user = current_user(request, verified=True)
     async with request.app.state.db.transaction() as session:
         watches = await uzum_timeslots.list_watches(session, user.id)
+        account = uzum_accounts.account_view(await uzum_accounts.find(session, user.id))
     seconds = request.app.state.settings.uzum_timeslot_interval_seconds
     interval = f"{seconds // 60} daqiqa" if seconds % 60 == 0 else f"{seconds} soniya"
     return templates.TemplateResponse(request, "timeslots.html", await page_context(
         request, title="Timeslot kuzatuvi", page_name="Timeslot kuzatuvi", active_page="timeslots",
-        watches=watches, has_active=any(watch["status"] == "active" for watch in watches), interval_label=interval))
+        watches=watches, has_active=any(watch["status"] == "active" for watch in watches), interval_label=interval,
+        account=account))
 
 
 @router.get("/profile")
 async def profile(request: Request):
+    user = current_user(request)
+    async with request.app.state.db.transaction() as session:
+        account = uzum_accounts.account_view(await uzum_accounts.find(session, user.id))
     return templates.TemplateResponse(request, "profile.html", await page_context(
-        request, title="Profil va limitlar", page_name="Profil", active_page="profile"))
+        request, title="Profil va limitlar", page_name="Profil", active_page="profile", account=account))
 
 
 @router.get("/privacy")

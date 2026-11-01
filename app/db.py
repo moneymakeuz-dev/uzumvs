@@ -29,7 +29,7 @@ class Database:
     async def ready(self) -> bool:
         async with self.engine.connect() as connection:
             revision = await connection.scalar(text("SELECT version_num FROM alembic_version"))
-            return revision == "0002"
+            return revision == "0003"
 
     async def close(self) -> None:
         await self.engine.dispose()

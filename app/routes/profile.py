@@ -13,7 +13,7 @@ from app.errors import AppError
 from app.models import Card, DeletionEvent, GenerationJob
 from app.schemas import StrictModel
 from app.security import check_password, hash_password
-from app.services import auth, cards, jobs
+from app.services import auth, cards, jobs, uzum_accounts
 from app.web import clear_cookie, current_user, verify_csrf
 
 router = APIRouter(prefix="/api/me")
@@ -68,6 +68,8 @@ async def delete_account(request: Request, payload: AccountDeletion):
         for card in owned:
             card.deleted_at = card.deleted_at or utcnow()
         session.add(DeletionEvent(entity_type="user", entity_id=user.id, expires_at=utcnow() + timedelta(days=31)))
+    # Uzum logini, paroli va tokeni akkaunt o'chirilishi so'ralgan zahoti o'chiriladi, kuzatuvlar to'xtaydi.
+    await uzum_accounts.disconnect(request.app.state.db, user.id)
     response = Response(status_code=202)
     clear_cookie(response, request.app.state.settings)
     return response

@@ -5,7 +5,6 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build-assets.mjs",
-    "test:node": "node --test \"scripts/*.test.mjs\"",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   },

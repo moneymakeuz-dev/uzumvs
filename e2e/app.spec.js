@@ -56,6 +56,9 @@ async function registerAndLogin(page) {
   await page.getByLabel('Email manzil').fill(email);
   await page.getByLabel('Parol', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Kirish' }).click();
+  await expect(page).toHaveURL(/\/uzum\/connect$/);
+  await expect(page.getByLabel('Uzum API tokeni')).toBeVisible();
+  await page.getByRole('link', { name: 'Keyinroq' }).click();
   await expect(page).toHaveURL(/\/cards\/new$/);
   return email;
 }
@@ -187,13 +190,14 @@ test('layouts fit required widths', async ({ page }) => {
   await registerAndLogin(page);
   await createCard(page);
   const cardUrl = page.url();
-  for (const path of ['/cards/new', '/cards', '/profile', '/timeslots', new URL(cardUrl).pathname]) {
+  for (const path of ['/cards/new', '/cards', '/profile', '/timeslots', '/uzum/connect', new URL(cardUrl).pathname]) {
     await page.goto(path);
     for (const width of [360, 390, 768, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       await noHorizontalOverflow(page);
       if (path === new URL(cardUrl).pathname) await screenshot(page, `card-${width}`);
       if (path === '/timeslots' && [390, 1440].includes(width)) await screenshot(page, `timeslots-${width}`);
+      if (path === '/uzum/connect' && [390, 1440].includes(width)) await screenshot(page, `uzum-connect-${width}`);
     }
   }
 });

@@ -14,7 +14,7 @@ from app.config import ROOT, Settings, get_settings
 from app.db import Database
 from app.errors import AppError
 from app.middleware import BodyLimitMiddleware, RateLimits, SecurityMiddleware
-from app.routes import auth, cards, pages, profile, timeslots
+from app.routes import auth, cards, pages, profile, timeslots, uzum
 from app.services import uzum_timeslots
 from app.web import context, templates
 
@@ -57,9 +57,9 @@ def create_app(settings: Settings | None = None, database: Database | None = Non
 
     @asynccontextmanager
     async def lifespan(application: FastAPI):
-        # Timeslot kuzatuvi Uzum brauzeri bilan bitta jarayonda bo'lishi kerak (umumiy profil va qulf).
+        # Timeslot kuzatuvi web jarayonida: "Hozir tekshirish" uni shu jarayondagi hodisa orqali uyg'otadi.
         watcher = None
-        if settings.uzum_timeslot_watch and settings.uzum_browser and settings.app_env != "test":
+        if settings.uzum_timeslot_watch and settings.app_env != "test":
             watcher = asyncio.create_task(uzum_timeslots.watch_loop(db, settings, application.state.timeslot_wake))
         yield
         if watcher:
@@ -82,6 +82,7 @@ def create_app(settings: Settings | None = None, database: Database | None = Non
     app.include_router(auth.router)
     app.include_router(cards.router)
     app.include_router(timeslots.router)
+    app.include_router(uzum.router)
     app.include_router(profile.router)
     app.include_router(pages.router)
     app.mount("/static", StaticFiles(directory=str(ROOT / "app" / "static"), check_dir=False), name="static")

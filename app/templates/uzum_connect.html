@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block workspace_content %}
+<div class="page-heading"><div><div class="eyebrow">UZUM · ULANISH</div><h1>Uzum akkauntingizni ulang</h1><p>Do'konlaringiz, yuk xatlari, XLSM yuborish va timeslot kuzatuvi shu akkaunt bilan ishlaydi.</p></div></div>
+{% if account.status in ['token_failed', 'login_failed'] %}<div class="notice danger" role="alert"><i data-lucide="triangle-alert"></i><span>{{ account.message }}</span></div>
+{% elif account.connected %}<div class="notice success" role="status"><i data-lucide="circle-check"></i><span>Ulangan: {{ account.login_hint }} · {{ account.shops|map(attribute='name')|join(', ') }}. Yangi ma'lumot kiritsangiz, eskisi almashtiriladi.</span></div>{% endif %}
+<section class="timeslot-panel" aria-labelledby="uzum-connect-title">
+  <h2 id="uzum-connect-title">Token va kabinet logini</h2>
+  <ol class="connect-steps">
+    <li><a href="https://seller.uzum.uz" target="_blank" rel="noopener noreferrer">seller.uzum.uz</a> kabinetida profil menyusidan <strong>«API kalitlar»</strong> («Ключи API») bo'limini oching, yangi kalit yarating va uni nusxalang.</li>
+    <li>Kabinetga kiradigan email (yoki telefon raqam) va parolni kiriting. Yuk xati timeslotini o'zgartirish va XLSM yuborish faqat kabinet orqali ishlaydi, token bilan emas.</li>
+  </ol>
+  <form id="uzum-connect-form" class="timeslot-form connect-form" data-next="{{ next_url }}" autocomplete="off">
+    <div class="uzum-field"><label for="uzum-api-token">Uzum API tokeni</label><div class="password-field"><input id="uzum-api-token" name="api_token" type="password" required minlength="10" maxlength="512" spellcheck="false" autocomplete="off"><button type="button" class="icon-button" data-action="show-password" title="Tokenni ko'rsatish" aria-label="Tokenni ko'rsatish"><i data-lucide="eye"></i></button></div></div>
+    <div class="uzum-field"><label for="uzum-login">Kabinet logini (email yoki telefon)</label><input id="uzum-login" name="login" type="text" required minlength="3" maxlength="254" spellcheck="false" autocomplete="off" placeholder="siz@kompaniya.uz yoki +998 90 123 45 67"></div>
+    <div class="uzum-field"><label for="uzum-password">Kabinet paroli</label><div class="password-field"><input id="uzum-password" name="password" type="password" required maxlength="128" autocomplete="off"><button type="button" class="icon-button" data-action="show-password" title="Parolni ko'rsatish" aria-label="Parolni ko'rsatish"><i data-lucide="eye"></i></button></div></div>
+    <p class="connect-note"><i data-lucide="shield-check"></i><span>Token, login va parol serverda shifrlangan holda saqlanadi va faqat sizning Uzum kabinetingizdagi amallar uchun ishlatiladi. Uzganingizda darhol o'chiriladi.</span></p>
+    <div class="dialog-actions">{% if not account.connected %}<a class="button secondary" href="{{ next_url }}">Keyinroq</a>{% endif %}<button type="submit" class="button primary"><i data-lucide="plug"></i>{{ 'Yangilash' if account.status != 'missing' else 'Ulash' }}</button></div>
+  </form>
+</section>
+{% if account.status != 'missing' %}<section class="profile-section danger-zone"><div><h2>Uzum'ni uzish</h2><p>Token, login va parol o'chiriladi, faol timeslot kuzatuvlari to'xtaydi.</p></div><div><button type="button" class="button danger-button" data-action="uzum-disconnect"><i data-lucide="trash-2"></i>Uzum'ni uzish</button></div></section>{% endif %}
+{% endblock %}

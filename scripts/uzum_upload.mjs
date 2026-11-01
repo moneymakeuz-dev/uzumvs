@@ -1,7 +1,6 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { chromium } from 'playwright';
-import { checkTimeslots, listInvoices, withReauth } from './uzum_timeslots.mjs';
 
 const [templatePath, shopId] = process.argv.slice(2);
 const email = process.env.UZUM_SELLER_EMAIL;
@@ -28,11 +27,6 @@ try {
     viewport: { width: 1440, height: 1000 },
   });
   const page = context.pages()[0] ?? await context.newPage();
-  let authorization = null;
-  page.on('request', request => {
-    const header = request.headers().authorization;
-    if (header && new URL(request.url()).hostname === 'api-seller.uzum.uz') authorization = header;
-  });
   stage = 'open_products';
   const productsUrl = `https://seller.uzum.uz/seller/${encodeURIComponent(shopId)}/products/all`;
   await page.goto(productsUrl, { waitUntil: 'domcontentloaded', timeout: 45_000 });
@@ -52,52 +46,6 @@ try {
 
   await page.goto(productsUrl, { waitUntil: 'domcontentloaded', timeout: 45_000 });
   await page.getByText('Мои товары', { exact: true }).waitFor({ state: 'visible', timeout: 60_000 });
-  if (process.env.UZUM_MODE === 'required') {
-    stage = 'required_characteristics';
-    const categoryId = Number(process.env.UZUM_CATEGORY_ID);
-    if (!authorization || !Number.isInteger(categoryId) || categoryId <= 0) throw new Error('no_session_token');
-    const url = `https://api-seller.uzum.uz/api/seller/shop/${encodeURIComponent(shopId)}/product/required-characteristics?categoryId=${categoryId}`;
-    const body = await page.evaluate(async ([target, header]) => {
-      const response = await fetch(target, { headers: { Authorization: header, Accept: 'application/json' } });
-      if (!response.ok) throw new Error(`http_${response.status}`);
-      return response.json();
-    }, [url, authorization]);
-    process.stdout.write(`${JSON.stringify({ status: 'ok', characteristics: body.characteristics ?? [] })}\n`);
-    await context.close();
-    process.exit(0);
-  }
-  if (process.env.UZUM_MODE === 'invoices' || process.env.UZUM_MODE === 'timeslots') {
-    stage = process.env.UZUM_MODE;
-    if (!authorization) throw new Error('no_session_token');
-    const send = (method, url, body) => page.evaluate(async ([target, header, verb, payload]) => {
-      const headers = { Authorization: header, Accept: 'application/json' };
-      if (payload !== null) headers['Content-Type'] = 'application/json';
-      const response = await fetch(target, { method: verb, headers, body: payload === null ? undefined : JSON.stringify(payload) });
-      return { ok: response.ok, status: response.status, json: await response.json().catch(() => null) };
-    }, [url, authorization, method, body ?? null]);
-    // Sahifani qayta ochganda kabinet tokenni tekshirib yangilaydi, yuqoridagi listener yangisini ushlaydi.
-    const refresh = async () => {
-      const stale = authorization;
-      const fresh = page.waitForRequest(request => {
-        const header = request.headers().authorization;
-        return Boolean(header) && header !== stale && new URL(request.url()).hostname === 'api-seller.uzum.uz';
-      }, { timeout: 15_000 }).catch(() => null);
-      await page.goto(productsUrl, { waitUntil: 'domcontentloaded', timeout: 45_000 });
-      await page.getByText('Мои товары', { exact: true }).waitFor({ state: 'visible', timeout: 60_000 });
-      await fresh;
-    };
-    const call = withReauth(send, refresh);
-    if (process.env.UZUM_MODE === 'invoices') {
-      process.stdout.write(`${JSON.stringify({ status: 'ok', invoices: await listInvoices(call, shopId) })}\n`);
-    } else {
-      // Bu rejimda birinchi argument — kuzatuv vazifalari yozilgan JSON fayl.
-      const { tasks, minLeadHours } = JSON.parse(await readFile(path.resolve(templatePath), 'utf8'));
-      const results = await checkTimeslots(call, shopId, tasks, { minLeadMs: minLeadHours * 3600_000, dryRun });
-      process.stdout.write(`${JSON.stringify({ status: 'ok', results })}\n`);
-    }
-    await context.close();
-    process.exit(0);
-  }
   const createLink = page.getByRole('link', { name: 'Создать карточку товара' });
   stage = 'open_menu';
   await createLink.locator('xpath=..').getByRole('button').last().click();
@@ -172,8 +120,7 @@ try {
   }
   const reason = String(error?.message ?? error).split('\n')[0];
   process.stderr.write(`stage=${stage} ${reason}\n`);
-  if (stage === 'invoices' || stage === 'timeslots') result('failed', 'api_error', reason.slice(0, 200));
-  else result('failed', stage === 'login' || stage === 'open_products' ? 'auth_timeout' : 'ui_changed');
+  result('failed', stage === 'login' || stage === 'open_products' ? 'auth_timeout' : 'ui_changed');
   process.exitCode = 1;
 } finally {
   if (context) await context.close();

@@ -38,12 +38,9 @@ class Settings(BaseSettings):
     smtp_starttls: bool = True
     smtp_use_tls: bool = False
     mail_backend: Literal["file", "smtp"] = "file"
-    uzum_seller_email: SecretStr = SecretStr("")
-    uzum_seller_password: SecretStr = SecretStr("")
-    uzum_seller_api_key: SecretStr = SecretStr("")
-    uzum_shop_id: str = ""
+    # Har bir a'zoning Uzum tokeni, kabinet logini va paroli shu Fernet kalit bilan shifrlab saqlanadi.
+    uzum_credentials_key: SecretStr = SecretStr("")
     uzum_browser: bool = True
-    uzum_allowed_emails: str = ""
     uzum_timeslot_watch: bool = True
     uzum_timeslot_interval_seconds: int = Field(default=180, ge=60, le=3600)
     uzum_timeslot_min_lead_hours: int = Field(default=48, ge=24, le=336)
@@ -81,11 +78,12 @@ class Settings(BaseSettings):
                 raise ValueError("Gemini requires GEMINI_API_KEY and AI_TERMS_ACCEPTED")
             if min(self.ai_daily_budget_usd, self.ai_input_price_per_million, self.ai_output_price_per_million) <= 0:
                 raise ValueError("Gemini requires a positive budget and verified model prices")
-        if self.backup_key.get_secret_value():
-            try:
-                Fernet(self.backup_key.get_secret_value().encode())
-            except ValueError:
-                raise ValueError("BACKUP_KEY must be generated with `karto create-backup-key`") from None
+        for name, key in (("BACKUP_KEY", self.backup_key), ("UZUM_CREDENTIALS_KEY", self.uzum_credentials_key)):
+            if key.get_secret_value():
+                try:
+                    Fernet(key.get_secret_value().encode())
+                except ValueError:
+                    raise ValueError(f"{name} must be generated with `karto create-backup-key`") from None
         if self.app_env == "production":
             if not self.secure_cookies or self.ai_provider != "gemini":
                 raise ValueError("Production requires HTTPS and Gemini; mock/disabled is not allowed")

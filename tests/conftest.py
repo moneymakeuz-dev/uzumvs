@@ -4,6 +4,7 @@ import sys
 
 import pytest
 import pytest_asyncio
+from cryptography.fernet import Fernet
 from dotenv import dotenv_values
 
 from app.config import ROOT, Settings
@@ -25,7 +26,7 @@ async def database(tmp_path):
     settings = Settings(_env_file=None, app_env="test", database_url=database_url,
                         ai_provider="mock", mail_backend="file", mail_dir=tmp_path / "mail",
                         upload_dir=tmp_path / "uploads", backup_dir=tmp_path / "backups",
-                        audit_log=tmp_path / "audit.log")
+                        audit_log=tmp_path / "audit.log", uzum_credentials_key=Fernet.generate_key().decode())
     database = Database(settings)
     async with database.engine.begin() as connection:
         await connection.run_sync(Base.metadata.drop_all)

@@ -8,7 +8,7 @@ from app.config import Settings
 from app.errors import AppError, not_found
 from app.models import LoginSession, User
 from app.security import normalize_email
-from app.services import auth, mail
+from app.services import auth, mail, uzum_accounts
 from app.web import clear_cookie, context, current_user, set_cookie, templates, verify_csrf
 
 router = APIRouter(prefix="/auth")
@@ -61,11 +61,14 @@ async def login(request: Request):
         async with request.app.state.db.transaction() as session:
             user = await auth.authenticate(session, email, values.get("password", ""))
             token = await auth.rotate_session(session, request.state.identity, user)
+            connected = await uzum_accounts.is_connected(session, user.id)
     except AppError as error:
         if error.code == "invalid_login":
             request.app.state.rates.hit("5 per 15 minutes", "login-fail", email.casefold())
         return render_form(request, "login", error.message, error.status)
-    response = RedirectResponse("/cards/new" if user.email_verified_at else "/profile", status_code=303)
+    # Kirgandan keyin Uzum ulanmagan bo'lsa token va kabinet logini so'raladi (keyinroq qilish ham mumkin).
+    target = "/profile" if not user.email_verified_at else "/cards/new" if connected else "/uzum/connect"
+    response = RedirectResponse(target, status_code=303)
     set_cookie(response, request.app.state.settings, token)
     return response
 

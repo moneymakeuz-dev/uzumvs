@@ -1,8 +1,9 @@
 {% extends "base.html" %}
 {% block workspace_content %}
-<div class="page-heading"><div><div class="eyebrow">UZUM · YUK XATLARI</div><h1>Timeslot kuzatuvi</h1><p>Tanlangan sanalarda slot bo'shasa, yuk xati avtomatik o'sha slotga ko'chiriladi. Tekshiruv har {{ interval_label }}da.</p></div><button type="button" class="button secondary" data-action="check-timeslots"><i data-lucide="refresh-cw"></i>Hozir tekshirish</button></div>
+<div class="page-heading"><div><div class="eyebrow">UZUM · YUK XATLARI</div><h1>Timeslot kuzatuvi</h1><p>Tanlangan sanalarda slot bo'shasa, yuk xati avtomatik o'sha slotga ko'chiriladi. Tekshiruv har {{ interval_label }}da.</p></div>{% if account.connected %}<button type="button" class="button secondary" data-action="check-timeslots"><i data-lucide="refresh-cw"></i>Hozir tekshirish</button>{% endif %}</div>
 <div class="notice warning" role="note"><i data-lucide="info"></i><span>Uzum qoidasi: timeslot faqat «Создана» holatidagi yuk xatida va ko'pi bilan 2 marta o'zgaradi. Har kuzatuv yuk xatini faqat bir marta ko'chiradi. Joriy slotgacha {{ settings.uzum_timeslot_min_lead_hours }} soatdan kam qolsa, jarimadan saqlanish uchun kuzatuv to'xtaydi.{% if settings.uzum_timeslot_dry_run %} <strong>Sinov rejimi yoqilgan: slot o'zgartirilmaydi.</strong>{% endif %}</span></div>
-<section class="timeslot-panel" aria-labelledby="timeslot-form-title">
+{% if not account.connected %}<div class="notice danger" role="alert"><i data-lucide="plug"></i><span>{{ account.message or "Yuk xatlarini kuzatish uchun Uzum akkauntingizni (API tokeni va kabinet logini) ulang." }} <a href="/uzum/connect?next=/timeslots">Uzum'ni ulash</a></span></div>
+{% else %}<section class="timeslot-panel" aria-labelledby="timeslot-form-title">
   <h2 id="timeslot-form-title">Yangi kuzatuv</h2>
   <form id="timeslot-form" class="timeslot-form">
     <div class="uzum-field"><label for="timeslot-shop">Uzum do‘koni</label><select id="timeslot-shop" required disabled><option value="">Yuklanmoqda…</option></select></div>
@@ -13,7 +14,7 @@
     </div>
     <div class="dialog-actions"><button type="submit" class="button primary" disabled><i data-lucide="calendar-clock"></i>Kuzatuvni boshlash</button></div>
   </form>
-</section>
+</section>{% endif %}
 <section id="timeslot-watches" class="timeslot-panel" aria-labelledby="timeslot-list-title" {% if has_active %}hx-get="/timeslots" hx-trigger="every 20s" hx-select="#timeslot-watches" hx-target="this" hx-swap="outerHTML"{% endif %}>
   <h2 id="timeslot-list-title">Kuzatuvlar</h2>
   {% if watches %}

@@ -149,13 +149,15 @@ async def test_uzum_template_catalog_and_card_download(database, account, monkey
     )
     monkeypatch.setattr(card_routes, "fill_template", lambda _template, _values: b"filled-xlsm")
 
-    async def fake_shops(_settings):
+    async def fake_shops(_db, _settings, user_id):
+        assert user_id == account.id
         return [{"id": "15895", "name": "Test shop"}]
 
-    async def fake_upload(_settings, _data, shop_id):
+    async def fake_upload(_db, _settings, user_id, _data, shop_id):
+        assert user_id == account.id
         return {"status": "accepted", "shop_id": shop_id, "message": "Test accepted"}
 
-    monkeypatch.setattr(card_routes, "list_shops", fake_shops)
+    monkeypatch.setattr(card_routes.uzum_accounts, "shops", fake_shops)
     monkeypatch.setattr(card_routes, "upload_template", fake_upload)
     async with logged_client(database, account) as client:
         card_id = await upload(client, settings, "uzum-template")
@@ -186,7 +188,8 @@ async def test_uzum_template_catalog_and_card_download(database, account, monkey
         assert catalog.json()["shops"] == [{"id": "15895", "name": "Test shop"}]
         assert "brands" not in catalog.json()
 
-        async def fake_get_template(_settings):
+        async def fake_get_template(_db, _settings, user_id, shop_id):
+            assert (user_id, shop_id) == (account.id, "15895")
             return b"cached-template"
 
         monkeypatch.setattr(card_routes, "get_template", fake_get_template)
@@ -194,8 +197,8 @@ async def test_uzum_template_catalog_and_card_download(database, account, monkey
         assert auto_catalog.status_code == 200, auto_catalog.text
         assert auto_catalog.json()["categories"][0]["id"] == "123"
 
-        async def fake_required(_settings, category_id):
-            assert category_id == 123
+        async def fake_required(_db, _settings, user_id, shop_id, category_id):
+            assert (user_id, shop_id, category_id) == (account.id, "15895", 123)
             return [{"title": "Цвет", "field": "color"}]
 
         monkeypatch.setattr(card_routes, "required_characteristics", fake_required)

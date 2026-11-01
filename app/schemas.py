@@ -238,3 +238,10 @@ class TimeslotWatchRequest(StrictModel):
     stock_title: str = Field(default="", max_length=200)
     date_from: date
     date_to: date
+
+
+class UzumConnectRequest(StrictModel):
+    api_token: str = Field(min_length=10, max_length=512, pattern=r"^\S+$")
+    login: str = Field(min_length=3, max_length=254)
+    # Parol aynan kiritilganidek Uzum'ga yuboriladi (chetidagi bo'shliqlar ham parolning qismi).
+    password: Annotated[str, StringConstraints(strip_whitespace=False, min_length=1, max_length=128)]

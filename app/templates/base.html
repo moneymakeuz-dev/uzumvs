@@ -19,7 +19,8 @@
       <nav aria-label="Asosiy navigatsiya">
         <a class="nav-item {{ 'active' if active_page == 'new' else '' }}" href="/cards/new"><i data-lucide="square-plus"></i>Yangi kartochka</a>
         <a class="nav-item {{ 'active' if active_page == 'history' else '' }}" href="/cards"><i data-lucide="layout-grid"></i>Kartochkalar</a>
-        {% if uzum_access %}<a class="nav-item {{ 'active' if active_page == 'timeslots' else '' }}" href="/timeslots"><i data-lucide="calendar-clock"></i>Timeslot kuzatuvi</a>{% endif %}
+        {% if user.email_verified_at %}<a class="nav-item {{ 'active' if active_page == 'timeslots' else '' }}" href="/timeslots"><i data-lucide="calendar-clock"></i>Timeslot kuzatuvi</a>
+        <a class="nav-item {{ 'active' if active_page == 'uzum' else '' }}" href="/uzum/connect"><i data-lucide="plug"></i>Uzum ulanishi</a>{% endif %}
         <a class="nav-item {{ 'active' if active_page == 'profile' else '' }}" href="/profile"><i data-lucide="settings-2"></i>Profil va limitlar</a>
       </nav>
       <div class="sidebar-bottom">

@@ -1,11 +1,12 @@
-"""Uzum FBO yuk xati timeslotini kuzatish: tanlangan sanalarda slot bo'shasa, yuk xatini o'sha slotga ko'chiradi."""
+"""Uzum FBO yuk xati timeslotini kuzatish: tanlangan sanalarda slot bo'shasa, yuk xatini o'sha slotga ko'chiradi.
+
+Uzum qoidalari: timeslot faqat «Создана» (CREATED) holatida, ko'pi bilan 2 marta (remainingAmountOfUpdates)
+o'zgaradi; slotgacha 48 soatdan kam qolganda ko'chirish jarimaga tushishi mumkin.
+"""
 import asyncio
-import json
 import logging
-import tempfile
 from collections import defaultdict
 from datetime import UTC, date, datetime
-from pathlib import Path
 from typing import Any
 from uuid import UUID
 
@@ -14,17 +15,19 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.clock import TASHKENT, utcnow
-from app.config import ROOT, Settings
+from app.config import Settings
 from app.db import Database
 from app.errors import AppError, not_found
 from app.models import TimeslotWatch, User
 from app.schemas import TimeslotWatchRequest
-from app.services import mail, uzum_seller
+from app.services import mail, uzum_accounts, uzum_cabinet
 
-SCRIPT_TIMEOUT_SECONDS = 240
+HOUR_MS = 3_600_000
 MAX_RANGE_DAYS = 60
 MAX_ACTIVE_WATCHES = 20
 MIN_CHECK_GAP_SECONDS = 30
+# Bu xatolarda a'zoning qolgan yuk xatlari ham tekshirilmaydi (kirish imkoni yo'q).
+LOGIN_ERRORS = {"uzum_login_invalid", "uzum_login_throttled"}
 logger = logging.getLogger(__name__)
 
 
@@ -54,38 +57,115 @@ def watch_payload(watch: TimeslotWatch) -> dict[str, Any]:
             "last_checked_at": slot_label(watch.last_checked_at), "created_at": watch.created_at.isoformat()}
 
 
-async def ensure_shop(settings: Settings, shop_id: str) -> None:
-    if shop_id not in {shop["id"] for shop in await uzum_seller.list_shops(settings)}:
-        raise AppError("uzum_shop_invalid", "Tanlangan do'kon API ro'yxatida topilmadi.", 422)
+def to_ms(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int | float):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            moment = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return int((moment if moment.tzinfo else moment.replace(tzinfo=UTC)).timestamp() * 1000)
+    return None
 
 
-async def _run(settings: Settings, mode: str, shop_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-    runtime = ROOT / "var"
-    runtime.mkdir(parents=True, exist_ok=True)
-    extra = {"UZUM_DRY_RUN": "1"} if settings.uzum_timeslot_dry_run else {}
-    with tempfile.TemporaryDirectory(prefix="uzum-timeslots-", dir=runtime) as temporary:
-        tasks = Path(temporary) / "tasks.json"
-        tasks.write_text(json.dumps(payload), encoding="utf-8")
-        returncode, result = await uzum_seller.run_script(settings, mode, tasks, shop_id, SCRIPT_TIMEOUT_SECONDS, extra)
-    if returncode != 0 or result.get("status") != "ok":
-        if result.get("code") == "auth_timeout":
-            raise AppError("uzum_auth_timeout", "Uzum kirishi, CAPTCHA yoki SMS tasdig'i vaqtida tugamadi.", 408)
-        raise AppError("uzum_invoices_unavailable", "Uzum kabinetidan yuk xatlari ma'lumotini olib bo'lmadi.", 502)
-    return result
+def tashkent_date(ms: int) -> date:
+    return datetime.fromtimestamp(ms / 1000, TASHKENT).date()
 
 
-async def list_invoices(settings: Settings, shop_id: str) -> list[dict[str, Any]]:
-    await ensure_shop(settings, shop_id)
-    result = await _run(settings, "invoices", shop_id, {})
+def summary(invoice: dict[str, Any]) -> dict[str, Any]:
+    status = invoice.get("invoiceStatus") if isinstance(invoice.get("invoiceStatus"), dict) else {}
+    stock = invoice.get("stock") if isinstance(invoice.get("stock"), dict) else {}
+    slot = invoice.get("timeSlotReservation") if isinstance(invoice.get("timeSlotReservation"), dict) else {}
+    remaining = invoice.get("remainingAmountOfUpdates")
+    return {"id": invoice.get("id"), "number": str(invoice.get("invoiceNumber") or invoice.get("id"))[:64],
+            "status": status.get("value"), "status_text": status.get("text"), "stock": str(stock.get("title") or "")[:200],
+            "time_from": to_ms(slot.get("timeFrom")),
+            "remaining": remaining if isinstance(remaining, int) and not isinstance(remaining, bool) else None}
+
+
+def blocker(info: dict[str, Any], date_from: date, date_to: date, now: int, min_lead_ms: int) -> dict[str, Any] | None:
+    """Ko'chirishga to'siq bo'lsa yakuniy natijani, aks holda None qaytaradi."""
+    if info["status"] != "CREATED":
+        return {"outcome": "stopped", "reason": "status", "detail": info["status_text"] or info["status"]}
+    if info["time_from"] is None:
+        return None
+    if date_from <= tashkent_date(info["time_from"]) <= date_to:
+        return {"outcome": "already"}
+    if info["remaining"] == 0:
+        return {"outcome": "stopped", "reason": "limit"}
+    if info["time_from"] - now < min_lead_ms:
+        return {"outcome": "stopped", "reason": "too_late"}
+    return None
+
+
+def slot_times(slots: list[Any]) -> list[tuple[int, dict[str, Any]]]:
+    return [(ms, slot) for slot in slots if isinstance(slot, dict) and (ms := to_ms(slot.get("timeFrom"))) is not None]
+
+
+def pick_slot(slots: list[Any], date_from: date, date_to: date, current_from: int | None, now: int) -> dict[str, Any] | None:
+    """Oraliqdagi (Toshkent sanasi bo'yicha) eng erta bo'sh slot; joriy slot va o'tib ketganlar hisobga olinmaydi."""
+    candidates = [(ms, slot) for ms, slot in slot_times(slots)
+                  if ms > now and ms != current_from and date_from <= tashkent_date(ms) <= date_to]
+    return min(candidates, key=lambda item: item[0])[1] if candidates else None
+
+
+async def check_invoice(cabinet: uzum_cabinet.Cabinet, watch: TimeslotWatch, settings: Settings, now: int) -> dict[str, Any]:
+    base = f"/seller/shop/{watch.shop_id}"
+
+    async def fetch_invoice() -> tuple[int, Any]:
+        response = await cabinet.call("GET", f"{base}/invoice/{watch.invoice_id}")
+        return response.status_code, uzum_cabinet.body(response)
+
+    status, invoice = await fetch_invoice()
+    if status != 200 or not isinstance(invoice, dict) or not invoice.get("id"):
+        return {"outcome": "error", "detail": f"invoice_http_{status}"}
+    info = summary(invoice)
+    stop = blocker(info, watch.date_from, watch.date_to, now, settings.uzum_timeslot_min_lead_hours * HOUR_MS)
+    if stop:
+        return {**stop, "invoice": info}
+    stock = invoice.get("stock") if isinstance(invoice.get("stock"), dict) else {}
+    pool = stock.get("poolSource")
+    response = await cabinet.call("POST", f"{base}/v2/invoice/time-slot/get",
+                                  json={"invoiceIds": [invoice["id"]], "poolSource": pool, "timeFrom": now + HOUR_MS})
+    if not response.is_success:
+        return {"outcome": "error", "invoice": info, "detail": f"slots_http_{response.status_code}"}
+    payload = uzum_cabinet.body(response)
+    inner = payload.get("payload") if isinstance(payload, dict) else None
+    slots = inner.get("timeSlots") if isinstance(inner, dict) else None
+    slots = slots if isinstance(slots, list) else []
+    nearest = min((ms for ms, _ in slot_times(slots)), default=None)
+    slot = pick_slot(slots, watch.date_from, watch.date_to, info["time_from"], now)
+    if slot is None:
+        return {"outcome": "waiting", "invoice": info, "nearest": nearest}
+    target = to_ms(slot["timeFrom"])
+    if settings.uzum_timeslot_dry_run:
+        return {"outcome": "dry_run", "invoice": info, "nearest": nearest, "slot": target}
+    response = await cabinet.call("POST", f"{base}/v2/invoice/time-slot/set", json={
+        "timeFrom": slot["timeFrom"], "invoiceIds": [invoice["id"]], "stockId": stock.get("id"), "poolSource": pool})
+    if not response.is_success:
+        code = uzum_cabinet.error_code(response)
+        # time-slot-003: slotni boshqa sotuvchi oldinroq band qildi.
+        return {"outcome": "missed" if code == "time-slot-003" else "error", "invoice": info, "nearest": nearest,
+                "detail": f"set_http_{response.status_code}" + (f" {code}" if code else "")}
+    status, after = await fetch_invoice()
+    if status != 200 or not isinstance(after, dict):
+        return {"outcome": "unverified", "invoice": info, "slot": target}
+    info = summary(after)
+    return {"outcome": "changed" if info["time_from"] == target else "unverified", "invoice": info, "slot": target}
+
+
+async def list_invoices(db: Database, settings: Settings, user_id: UUID, shop_id: str) -> list[dict[str, Any]]:
+    await uzum_accounts.ensure_shop(db, settings, user_id, shop_id)
+    async with uzum_accounts.cabinet(db, settings, user_id) as cabinet:
+        raw = await uzum_cabinet.list_invoices(cabinet, shop_id)
     invoices = []
-    for item in result.get("invoices") or []:
-        if not isinstance(item, dict) or not isinstance(item.get("id"), int):
-            continue
-        start = from_ms(item.get("timeFrom"))
-        remaining = item.get("remainingUpdates")
-        invoices.append({"id": item["id"], "number": str(item.get("number") or item["id"])[:64],
-                         "stock": str(item.get("stock") or "")[:200], "current_slot": slot_label(start),
-                         "remaining_updates": remaining if isinstance(remaining, int) else None})
+    for info in map(summary, raw):
+        if isinstance(info["id"], int) and not isinstance(info["id"], bool):
+            invoices.append({"id": info["id"], "number": info["number"], "stock": info["stock"],
+                             "current_slot": slot_label(from_ms(info["time_from"])), "remaining_updates": info["remaining"]})
     return invoices
 
 
@@ -159,7 +239,7 @@ def outcome_state(outcome: dict[str, Any], settings: Settings) -> tuple[str, str
 
 
 async def check_due(db: Database, settings: Settings) -> int:
-    """Faol kuzatuvlarni do'konlar bo'yicha bitta brauzer sessiyasida tekshiradi; tekshirilganlar sonini qaytaradi."""
+    """Faol kuzatuvlarni har bir a'zoning o'z Uzum sessiyasida tekshiradi; tekshirilganlar sonini qaytaradi."""
     async with db.transaction() as session:
         expired = (await session.scalars(update(TimeslotWatch).where(
             TimeslotWatch.status == "active", TimeslotWatch.date_to < local_today(),
@@ -168,23 +248,33 @@ async def check_due(db: Database, settings: Settings) -> int:
         watches = (await session.scalars(select(TimeslotWatch).where(TimeslotWatch.status == "active")
                                          .order_by(TimeslotWatch.last_checked_at.asc().nulls_first())
                                          .limit(MAX_ACTIVE_WATCHES * 2))).all()
-    by_shop: dict[str, list[TimeslotWatch]] = defaultdict(list)
+    by_user: dict[UUID, list[TimeslotWatch]] = defaultdict(list)
     for watch in watches:
-        by_shop[watch.shop_id].append(watch)
+        by_user[watch.user_id].append(watch)
     finished = list(expired)
-    for shop_id, group in by_shop.items():
-        tasks = [{"watchId": str(watch.id), "invoiceId": watch.invoice_id, "dateFrom": watch.date_from.isoformat(),
-                  "dateTo": watch.date_to.isoformat()} for watch in group]
-        try:
-            result = await _run(settings, "timeslots", shop_id,
-                                {"tasks": tasks, "minLeadHours": settings.uzum_timeslot_min_lead_hours})
-            outcomes = {str(item.get("watchId")): item for item in result.get("results") or [] if isinstance(item, dict)}
-            failure = "Uzum javobida bu yuk xati topilmadi."
-        except AppError as error:
-            outcomes, failure = {}, error.message
+    for user_id, group in by_user.items():
+        outcomes, failure = await _check_user(db, settings, user_id, group)
         finished += await _apply(db, settings, [watch.id for watch in group], outcomes, failure)
     await _notify(db, settings, finished)
     return len(watches)
+
+
+async def _check_user(db: Database, settings: Settings, user_id: UUID,
+                      group: list[TimeslotWatch]) -> tuple[dict[str, dict[str, Any]], str]:
+    """A'zoning yuk xatlari uning o'z kabinet sessiyasida; kirib bo'lmasa olingan natijalar saqlanib, qolganiga sabab yoziladi."""
+    outcomes: dict[str, dict[str, Any]] = {}
+    try:
+        async with uzum_accounts.cabinet(db, settings, user_id, background=True) as cabinet:
+            for watch in group:
+                try:
+                    outcomes[str(watch.id)] = await check_invoice(cabinet, watch, settings, int(utcnow().timestamp() * 1000))
+                except AppError as error:
+                    if error.code in LOGIN_ERRORS:
+                        raise
+                    outcomes[str(watch.id)] = {"outcome": "error", "detail": error.code}
+    except AppError as error:
+        return outcomes, error.message
+    return outcomes, "Tekshiruv natijasi olinmadi, keyingi tekshiruvda qayta uriniladi."
 
 
 async def _apply(db: Database, settings: Settings, watch_ids: list[UUID], outcomes: dict[str, dict],
@@ -205,7 +295,7 @@ async def _apply(db: Database, settings: Settings, watch_ids: list[UUID], outcom
                 continue
             invoice = outcome.get("invoice") if isinstance(outcome.get("invoice"), dict) else {}
             if invoice:
-                watch.current_time_from = from_ms(invoice.get("timeFrom"))
+                watch.current_time_from = from_ms(invoice.get("time_from"))
                 watch.invoice_number = str(invoice.get("number") or watch.invoice_number)[:64]
                 watch.stock_title = str(invoice.get("stock") or watch.stock_title)[:200]
             status, message = outcome_state(outcome, settings)
@@ -236,7 +326,7 @@ async def _notify(db: Database, settings: Settings, finished: list[TimeslotWatch
 
 
 async def watch_loop(db: Database, settings: Settings, wake: asyncio.Event) -> None:
-    """Web jarayonida ishlaydi: Uzum brauzer profili va _browser_lock shu jarayonda."""
+    """Web jarayonida ishlaydi: 'Hozir tekshirish' shu jarayondagi `wake` hodisasi orqali uyg'otadi."""
     loop = asyncio.get_running_loop()
     while True:
         wake.clear()

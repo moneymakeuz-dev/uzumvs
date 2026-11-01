@@ -18,18 +18,13 @@ from app.schemas import (
     UzumPublishRequest,
     UzumTemplateRequest,
 )
-from app.services import cards, exports, jobs, quotas
+from app.services import cards, exports, jobs, quotas, uzum_accounts
 from app.services.ikpu import recommended, suggest_ikpu
 from app.services.image_hosting import publish_images
 from app.services.images import MAX_FILE_BYTES, image_path, prepare_image
-from app.services.uzum_seller import (
-    get_template,
-    list_shops,
-    required_characteristics,
-    upload_template,
-)
+from app.services.uzum_seller import get_template, required_characteristics, upload_template
 from app.services.uzum_template import fill_template, inspect_template, recommend_category
-from app.web import current_user, uzum_user, verify_csrf
+from app.web import current_user, verify_csrf
 
 router = APIRouter(prefix="/api")
 
@@ -159,12 +154,13 @@ async def export_uzum_template(request: Request, card_id: UUID):
 @router.post("/cards/{card_id}/uzum-publish")
 async def publish_uzum_template(request: Request, card_id: UUID):
     data, payload = await _prepare_uzum_template(request, card_id, UzumPublishRequest)
-    result = await upload_template(request.app.state.settings, data, payload.shop_id)
+    user = current_user(request, verified=True)
+    result = await upload_template(request.app.state.db, request.app.state.settings, user.id, data, payload.shop_id)
     return JSONResponse(result, headers={"Cache-Control": "no-store"})
 
 
 async def _prepare_uzum_template(request: Request, card_id: UUID, payload_type):
-    user = uzum_user(request)
+    user = current_user(request, verified=True)
     verify_csrf(request)
     async with request.form(max_files=1, max_fields=2, max_part_size=1024 * 1024) as form:
         template = form.get("template")
@@ -202,14 +198,20 @@ async def _prepare_uzum_template(request: Request, card_id: UUID, payload_type):
     if not photo_urls:
         values["photo_urls"] = await publish_images(image_paths)
     if template_bytes is None:
-        template_bytes = await get_template(request.app.state.settings)
+        template_bytes = await _official_template(request, user.id)
     data = await asyncio.to_thread(fill_template, template_bytes, values)
     return data, payload
 
 
+async def _official_template(request: Request, user_id: UUID) -> bytes:
+    db, settings = request.app.state.db, request.app.state.settings
+    shops = await uzum_accounts.shops(db, settings, user_id)
+    return await get_template(db, settings, user_id, shops[0]["id"])
+
+
 @router.post("/cards/{card_id}/uzum-template/catalog")
 async def uzum_template_catalog(request: Request, card_id: UUID):
-    user = uzum_user(request)
+    user = current_user(request, verified=True)
     verify_csrf(request)
     async with request.form(max_files=1, max_fields=1, max_part_size=1024 * 1024) as form:
         template = form.get("template")
@@ -221,12 +223,13 @@ async def uzum_template_catalog(request: Request, card_id: UUID):
             raise AppError("review_required", "Avval kartochkani tekshirib, saqlang.", 409)
         content = CardContent.model_validate(card.content_json).model_dump()
         seller_notes = card.seller_notes
+    shops = await uzum_accounts.shops(request.app.state.db, request.app.state.settings, user.id)
     if template_bytes is None:
-        template_bytes = await get_template(request.app.state.settings)
+        template_bytes = await _official_template(request, user.id)
     info = await asyncio.to_thread(inspect_template, template_bytes)
     result = info.to_payload()
     result["recommended_category"] = recommend_category(content, seller_notes, info.categories)
-    result["shops"] = await list_shops(request.app.state.settings)
+    result["shops"] = shops
     return JSONResponse(result, headers={"Cache-Control": "no-store"})
 
 
@@ -248,11 +251,13 @@ async def uzum_ikpu(request: Request, card_id: UUID, category: str = Query("", m
 
 @router.get("/cards/{card_id}/uzum-required")
 async def uzum_required(request: Request, card_id: UUID, category_id: int = Query(..., gt=0)):
-    user = uzum_user(request)
+    user = current_user(request, verified=True)
     async with request.app.state.db.transaction() as session:
         card = await cards.owned_card(session, user.id, card_id)
         content = CardContent.model_validate(card.content_json).model_dump() if card.content_json else {}
-    items = await required_characteristics(request.app.state.settings, category_id)
+    db, settings = request.app.state.db, request.app.state.settings
+    shops = await uzum_accounts.shops(db, settings, user.id)
+    items = await required_characteristics(db, settings, user.id, shops[0]["id"], category_id)
     color = ((content.get("color") or {}).get("ru")) or ""
     return JSONResponse({"characteristics": items, "defaults": {"color": color}}, headers={"Cache-Control": "no-store"})
 
