@@ -28,11 +28,12 @@ async def reviews_page(request: Request):
         items = [uzum_reviews.template_view(item) for item in await uzum_reviews.templates_of(session, user.id)]
         replies = await uzum_reviews.history(session, user.id)
         account = uzum_accounts.account_view(await uzum_accounts.find(session, user.id))
+        shops = uzum_reviews.shops_view(account["shops"], await uzum_reviews.shop_rules(session, user.id))
     minutes = request.app.state.settings.review_reply_interval_seconds // 60
     return templates.TemplateResponse(request, "reviews.html", await page_context(
         request, title="Sharhlarga javob", page_name="Sharhlarga javob", active_page="reviews", account=account,
-        review_settings=current, review_templates=items, replies=replies, interval_label=f"{minutes} daqiqa"),
-        headers=NO_STORE)
+        review_settings=current, review_shops=shops, method_labels=uzum_reviews.AUTO_METHOD_LABELS,
+        review_templates=items, replies=replies, interval_label=f"{minutes} daqiqa"), headers=NO_STORE)
 
 
 @router.get("/reviews/pending")

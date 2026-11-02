@@ -15,14 +15,16 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.clock import utcnow
 from app.db import Base
 
+METHODS_CHECK = "IN ('ai','template','skip')"
+
 
 class ReviewSettings(Base):
     """A'zoning sharhlarga avtomatik javob sozlamasi; `since` dan oldingi sharhlarga avtomatik javob yozilmaydi."""
 
     __tablename__ = "review_settings"
     __table_args__ = (
-        CheckConstraint("text_method IN ('ai','template')"),
-        CheckConstraint("empty_method IN ('ai','template','skip')"),
+        CheckConstraint(f"text_method {METHODS_CHECK}"),
+        CheckConstraint(f"empty_method {METHODS_CHECK}"),
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
@@ -33,6 +35,22 @@ class ReviewSettings(Base):
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_message: Mapped[str] = mapped_column(String(300), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ReviewShopSettings(Base):
+    """Do'kon uchun alohida usul; NULL — shu turdagi sharhlarga umumiy sozlama ishlatiladi."""
+
+    __tablename__ = "review_shop_settings"
+    __table_args__ = (
+        CheckConstraint(f"text_method {METHODS_CHECK}"),
+        CheckConstraint(f"empty_method {METHODS_CHECK}"),
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    shop_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    text_method: Mapped[str | None] = mapped_column(String(16))
+    empty_method: Mapped[str | None] = mapped_column(String(16))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

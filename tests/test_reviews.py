@@ -8,7 +8,7 @@ from sqlalchemy import delete, select
 from app.ai import replies
 from app.ai.provider import ProviderFailure, ProviderResult
 from app.clock import utcnow
-from app.models import DailyUsage, ReviewReply, ReviewSettings, ReviewTemplate
+from app.models import DailyUsage, ReviewReply, ReviewSettings, ReviewShopSettings, ReviewTemplate
 from app.schemas import ReviewSettingsRequest
 from app.services import uzum_accounts, uzum_reviews
 from tests.fake_uzum import FakeUzum, review
@@ -56,6 +56,8 @@ async def test_reviews_page_lists_only_own_unanswered_reviews(database, account,
         page = await client.get("/reviews")
         assert page.status_code == 200 and 'id="review-settings-form"' in page.text and 'hx-get="/reviews/pending"' in page.text
         assert page.text.count('class="review-template-form" data-template-id') == len(uzum_reviews.DEFAULT_TEMPLATES)
+        # Bitta do'kon bo'lsa do'konlar bo'yicha bo'lim kerak emas: umumiy sozlama shu do'konniki.
+        assert "data-review-shops" not in page.text and "Barcha sharhlarga amal qiladi" in page.text
         pending = (await client.get("/reviews/pending")).text
     assert "Mahsulot 11" in pending and "Mahsulot 12" in pending
     assert "Mahsulot 13" not in pending and "Mahsulot 14" not in pending
@@ -185,12 +187,58 @@ async def test_auto_reply_skips_textless_and_leaves_fresh_drafts_alone(database,
         assert (await client.post("/api/reviews/51/draft", json={"method": "template"})).status_code == 200
     await uzum_reviews.run_due(db, settings)
     assert uzum.replies == []
-    assert await last_message(db, account.id) == "0 ta javob yuborildi, 1 ta matnsiz sharh o'tkazib yuborildi."
+    assert await last_message(db, account.id) == "0 ta javob yuborildi, 1 ta sharhga sozlama bo'yicha javob yozilmadi."
 
     async with db.transaction() as session:
         (await session.scalars(select(ReviewReply))).one().updated_at = utcnow() - uzum_reviews.DRAFT_HOLD - timedelta(minutes=1)
     await uzum_reviews.run_due(db, settings)
     assert [item[0] for item in uzum.replies] == [51]
+
+
+async def test_each_shop_can_use_its_own_method_or_the_general_one(database, account, uzum):
+    db, settings = database
+    uzum.add_seller("seller@uzum.test", "uzum-pass-1", "api-token-seller-1", [{"id": 77, "name": "Shop"}, {"id": 78, "name": "Second"}])
+    await uzum_accounts.connect(db, settings, account.id, **CONNECT)
+    body = {"auto_reply": True, "text_method": "ai", "empty_method": "template", "backlog": True,
+            "shops": [{"shop_id": "78", "text_method": "template", "empty_method": "skip"}, {"shop_id": "77"}]}
+    async with logged_client(database, account.email_normalized) as client:
+        page = (await client.get("/reviews")).text
+        assert page.count("data-shop-id=") == 2 and "Umumiy sozlama (AI)" in page and "Umumiy sozlama (Shablon)" in page
+        assert "Hamma do&#39;konlar umumiy sozlamada" in page
+        assert (await client.put("/api/review-settings", json=body)).status_code == 200
+        foreign = await client.put("/api/review-settings", json={**body, "shops": [{"shop_id": "88", "text_method": "ai"}]})
+        assert (foreign.status_code, foreign.json()["error"]["code"]) == (422, "uzum_shop_invalid")
+        twice = await client.put("/api/review-settings", json={**body, "shops": [{"shop_id": "77"}, {"shop_id": "77"}]})
+        assert twice.status_code == 422
+        page = (await client.get("/reviews")).text
+    assert 'class="review-shop custom" data-shop-id="78"' in page and "1 ta do&#39;konda alohida sozlama" in page
+
+    uzum.reviews[101] = review(101, 5, "Zo'r", shop_id=77)
+    uzum.reviews[102] = review(102, 5, shop_id=77)
+    uzum.reviews[103] = review(103, 5, "Zo'r", shop_id=78)
+    uzum.reviews[104] = review(104, 5, shop_id=78)
+    await uzum_reviews.run_due(db, settings)
+    assert {key: row.method for key, row in (await stored(db, account.id)).items()} == {101: "ai", 102: "template", 103: "template"}
+    assert await last_message(db, account.id) == "3 ta javob yuborildi, 1 ta sharhga sozlama bo'yicha javob yozilmadi."
+
+    # Do'kon umumiy sozlamaga qaytdi; umumiyda matnli sharhlarga javob yozilmaydi, matnsizlarga AI.
+    await configure(db, account.id, text_method="skip", empty_method="ai", backlog=True, shops=[{"shop_id": "78"}])
+    uzum.reviews[105] = review(105, 4, "Yaxshi", shop_id=78)
+    await uzum_reviews.run_due(db, settings)
+    assert {key: row.method for key, row in (await stored(db, account.id)).items() if key > 103} == {104: "ai"}
+    async with db.transaction() as session:
+        assert (await session.scalars(select(ReviewShopSettings))).all() == []
+
+
+async def test_shop_rules_only_change_listed_shops(database, account, uzum):
+    db, settings = database
+    uzum.add_seller("seller@uzum.test", "uzum-pass-1", "api-token-seller-1", [{"id": 77, "name": "Shop"}, {"id": 78, "name": "Second"}])
+    await uzum_accounts.connect(db, settings, account.id, **CONNECT)
+    await configure(db, account.id, shops=[{"shop_id": "77", "empty_method": "skip"}, {"shop_id": "78", "text_method": "template"}])
+    await configure(db, account.id, shops=[{"shop_id": "77", "text_method": "ai"}])
+    async with db.transaction() as session:
+        rules = await uzum_reviews.shop_rules(session, account.id)
+    assert {key: (rule.text_method, rule.empty_method) for key, rule in rules.items()} == {"77": ("ai", None), "78": ("template", None)}
 
 
 async def test_moderation_status_is_synced_from_uzum(database, account, uzum):

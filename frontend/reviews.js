@@ -10,6 +10,36 @@ function markInvalid(form, fields = {}) {
   for (const name of Object.keys(fields)) form.elements[name]?.setAttribute('aria-invalid', 'true');
 }
 
+function shopRules(form) {
+  return [...form.querySelectorAll('[data-shop-id]')].map(row => ({ shop_id: row.dataset.shopId,
+    text_method: row.querySelector('[data-shop-method="text_method"]').value,
+    empty_method: row.querySelector('[data-shop-method="empty_method"]').value }));
+}
+
+// Do'kon qatori: alohida usul tanlangan bo'lsa belgilanadi; pastdagi yig'indi va "qaytarish" tugmasi yangilanadi.
+function markShops(form) {
+  const rows = [...form.querySelectorAll('[data-shop-id]')];
+  if (!rows.length) return;
+  let custom = 0;
+  for (const row of rows) {
+    const selects = [...row.querySelectorAll('[data-shop-method]')];
+    selects.forEach(select => select.classList.toggle('custom', select.value !== 'default'));
+    const changed = selects.some(select => select.value !== 'default');
+    row.classList.toggle('custom', changed);
+    row.querySelector('[data-shop-badge]').hidden = !changed;
+    custom += changed;
+  }
+  form.querySelector('[data-shop-summary]').textContent = custom ? `${custom} ta do'konda alohida sozlama` : "Hamma do'konlar umumiy sozlamada";
+  form.querySelector('[data-action="reset-shops"]').hidden = !custom;
+}
+
+// Umumiy sozlama o'zgarsa do'konlardagi "Umumiy sozlama (...)" yozuvi ham o'zgaradi.
+function syncDefaults(form, general) {
+  const label = general.selectedOptions[0].dataset.short;
+  form.querySelectorAll(`[data-shop-method="${general.name}"] [data-default]`)
+    .forEach(option => { option.textContent = `Umumiy sozlama (${label})`; });
+}
+
 async function saveSettings(form) {
   const auto = form.elements.auto_reply.checked;
   if (auto && !form.elements.auto_reply.defaultChecked && !await confirmAction(
@@ -19,7 +49,7 @@ async function saveSettings(form) {
   try {
     await api('/api/review-settings', { method: 'PUT', body: jsonBody({ auto_reply: auto,
       text_method: form.elements.text_method.value, empty_method: form.elements.empty_method.value,
-      backlog: form.elements.backlog.checked }) });
+      backlog: form.elements.backlog.checked, shops: shopRules(form) }) });
     location.reload();
   } catch (error) { toast(error.message, true); busy(submit, false); }
 }
@@ -74,6 +104,10 @@ export function initReviews() {
     else if (form.matches('.review-reply-form')) { event.preventDefault(); sendReply(form); }
     else if (form.matches('.review-template-form')) { event.preventDefault(); saveTemplate(form); }
   });
+  settings.addEventListener('change', event => {
+    if (event.target.matches('[data-general]')) syncDefaults(settings, event.target);
+    if (event.target.matches('[data-shop-method]')) markShops(settings);
+  });
   document.addEventListener('click', async event => {
     const draft = event.target.closest('[data-review-draft]');
     if (draft) draftReply(draft);
@@ -83,6 +117,11 @@ export function initReviews() {
       if (!await confirmAction("Shablon o'chiriladi. Avval yuborilgan javoblar o'zgarmaydi.", "Shablonni o'chirish")) return;
       try { await api(`/api/review-templates/${form.dataset.templateId}`, { method: 'DELETE' }); form.remove(); toast("Shablon o'chirildi."); }
       catch (error) { toast(error.message, true); }
+    }
+    if (event.target.closest('[data-action="reset-shops"]')) {
+      settings.querySelectorAll('[data-shop-method]').forEach(select => { select.value = 'default'; });
+      markShops(settings);
+      toast("Hamma do'konlar umumiy sozlamaga qaytarildi. Saqlashni unutmang.");
     }
     const run = event.target.closest('[data-action="run-reviews"]');
     if (run) {

@@ -240,6 +240,21 @@ dialog p { margin: 16px 0 24px; color: var(--muted); font-size: 13px; }
 .review-toggle input { margin-top: 2px; }
 .review-toggle span { display: grid; gap: 3px; }
 .review-toggle small { color: var(--muted); font-size: 12px; }
+.review-group { display: grid; gap: 12px; min-width: 0; margin: 0; padding: 14px 16px 16px; border: 1px solid var(--line); border-radius: 6px; }
+.review-group legend { padding: 0 6px; font-size: 13px; font-weight: 700; }
+.review-group-note { color: var(--muted); font-size: 12px; line-height: 1.6; }
+.review-shops { display: grid; margin: 0; padding: 0; list-style: none; }
+.review-shop { display: grid; grid-template-columns: minmax(0, 1.2fr) repeat(2, minmax(0, 1fr)); gap: 12px; align-items: center; padding: 10px 8px; border-top: 1px solid var(--line); }
+.review-shop.custom { background: var(--surface); }
+.review-shop-head { padding-block: 0 8px; border-top: 0; color: var(--muted); font-size: 11px; font-weight: 600; }
+.review-shop-name { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.review-shop-name svg { width: 15px; height: 15px; flex: none; color: var(--muted); }
+.review-settings .review-shop label { gap: 4px; }
+.review-shop select { padding: 8px 10px; font-size: 12px; }
+.review-shop select.custom { border-color: var(--accent); color: var(--accent-dark); font-weight: 600; }
+.review-shop-caption { display: none; color: var(--muted); font-size: 11px; }
+.review-shops-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+@media (max-width: 620px) { .review-shop-head { display: none; } .review-shop { grid-template-columns: minmax(0, 1fr); gap: 8px; padding-inline: 0; } .review-shop.custom { padding-inline: 8px; } .review-settings .review-shop label { grid-template-columns: 58px minmax(0, 1fr); align-items: center; gap: 8px; } .review-shop-caption { display: block; } }
 .connect-note code { padding: 1px 4px; border-radius: 3px; background: var(--surface); color: var(--ink); }
 .review-list { display: grid; gap: 14px; margin: 0; padding: 0; list-style: none; }
 .review-item { display: grid; gap: 8px; padding: 16px; border: 1px solid var(--line); border-radius: 6px; min-width: 0; }

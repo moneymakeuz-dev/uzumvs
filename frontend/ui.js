@@ -3,7 +3,7 @@ import { createIcons, Layers2, SquarePlus, LayoutGrid, Settings2, Sparkles, Arro
   Trash2, GripVertical, Check, Copy, Download, RefreshCw, Search, ChevronLeft, ChevronDown,
   X, CircleCheck, LoaderCircle, TriangleAlert, Info, SlidersHorizontal, FileSpreadsheet,
   Plus, Mail, LockKeyhole, ShieldCheck, MoreHorizontal, CheckCheck, Maximize2, CalendarClock, Plug,
-  MessageSquareReply, Send, FileText } from 'lucide';
+  MessageSquareReply, Send, FileText, RotateCcw, Store } from 'lucide';
 
 export function icons() {
   createIcons({ icons: { Layers2, SquarePlus, LayoutGrid, Settings2, Sparkles, ArrowUpRight,
@@ -11,7 +11,7 @@ export function icons() {
     Trash2, GripVertical, Check, Copy, Download, RefreshCw, Search, ChevronLeft, ChevronDown,
     X, CircleCheck, LoaderCircle, TriangleAlert, Info, SlidersHorizontal, FileSpreadsheet,
     Plus, Mail, LockKeyhole, ShieldCheck, MoreHorizontal, CheckCheck, Maximize2, CalendarClock, Plug,
-    MessageSquareReply, Send, FileText }, attrs: { 'aria-hidden': 'true' } });
+    MessageSquareReply, Send, FileText, RotateCcw, Store }, attrs: { 'aria-hidden': 'true' } });
 }
 
 let toastTimer;

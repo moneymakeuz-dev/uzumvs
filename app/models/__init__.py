@@ -1,9 +1,9 @@
 from app.models.auth import AuthToken, LoginSession, User
 from app.models.cards import Card, CardImage
 from app.models.jobs import AICallUsage, GenerationJob, WorkerHeartbeat
-from app.models.reviews import ReviewReply, ReviewSettings, ReviewTemplate
+from app.models.reviews import ReviewReply, ReviewSettings, ReviewShopSettings, ReviewTemplate
 from app.models.timeslots import TimeslotWatch
 from app.models.usage import DailyBudget, DailyUsage, DeletionEvent, MonthlyUsage
 from app.models.uzum import UzumAccount
 
-__all__ = ["AICallUsage", "AuthToken", "Card", "CardImage", "DailyBudget", "DailyUsage", "DeletionEvent", "GenerationJob", "LoginSession", "MonthlyUsage", "ReviewReply", "ReviewSettings", "ReviewTemplate", "TimeslotWatch", "User", "UzumAccount", "WorkerHeartbeat"]
+__all__ = ["AICallUsage", "AuthToken", "Card", "CardImage", "DailyBudget", "DailyUsage", "DeletionEvent", "GenerationJob", "LoginSession", "MonthlyUsage", "ReviewReply", "ReviewSettings", "ReviewShopSettings", "ReviewTemplate", "TimeslotWatch", "User", "UzumAccount", "WorkerHeartbeat"]

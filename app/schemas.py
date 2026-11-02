@@ -240,12 +240,27 @@ class TimeslotWatchRequest(StrictModel):
     date_to: date
 
 
+class ReviewShopRequest(StrictModel):
+    shop_id: str = Field(pattern=r"^\d{1,32}$")
+    # "default" — do'kon umumiy sozlamaga amal qiladi.
+    text_method: Literal["default", "ai", "template", "skip"] = "default"
+    empty_method: Literal["default", "ai", "template", "skip"] = "default"
+
+
 class ReviewSettingsRequest(StrictModel):
     auto_reply: bool
-    text_method: Literal["ai", "template"]
+    text_method: Literal["ai", "template", "skip"]
     empty_method: Literal["ai", "template", "skip"]
     # Avtomatik rejim yoqilganda eski javobsiz sharhlarga ham javob yozilsinmi.
     backlog: bool = False
+    # Faqat ro'yxatdagi do'konlar yangilanadi; qolganlarining sozlamasi o'zgarmaydi.
+    shops: list[ReviewShopRequest] = Field(default_factory=list, max_length=200)
+
+    @model_validator(mode="after")
+    def unique_shops(self) -> Self:
+        if len({item.shop_id for item in self.shops}) != len(self.shops):
+            raise ValueError("Do'konlar takrorlanmasligi kerak")
+        return self
 
 
 class ReviewTemplateRequest(StrictModel):

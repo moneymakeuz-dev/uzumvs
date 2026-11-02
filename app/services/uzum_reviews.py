@@ -10,7 +10,7 @@ from datetime import timedelta
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,7 +21,7 @@ from app.clock import utcnow
 from app.config import Settings
 from app.db import Database
 from app.errors import AppError, not_found
-from app.models import ReviewReply, ReviewSettings, ReviewTemplate
+from app.models import ReviewReply, ReviewSettings, ReviewShopSettings, ReviewTemplate
 from app.schemas import ReviewSettingsRequest, ReviewTemplateRequest
 from app.services import budget, quotas, uzum_accounts, uzum_cabinet
 from app.services.uzum_timeslots import from_ms, slot_label
@@ -46,6 +46,8 @@ NO_NAMES = {"безымянный", "безымянная", "без имени",
 # Ism bo'lmasa {ism} vergul va murojaat so'zi bilan birga olib tashlanadi: «Assalomu alaykum, {ism}!» → «Assalomu alaykum!».
 NO_NAME = re.compile(r"\s*,\s*\{ism\}|(?:\b(?:hurmatli|qadrli|уважаем\w*|дорог\w*)\s+)?\{ism\}\s*,?\s*", re.IGNORECASE)
 METHOD_LABELS = {"ai": "AI", "template": "Shablon", "manual": "Qo'lda"}
+# Avtomatik rejim usullari (umumiy va do'kon sozlamasi uchun).
+AUTO_METHOD_LABELS = {"ai": "AI", "template": "Shablon", "skip": "Javob yozilmasin"}
 STATUS_LABELS = {"draft": "Loyiha", "sending": "Yuborilmoqda", "sent": "Yuborildi", "failed": "Xato"}
 MODERATION_LABELS = {"CREATED": "Moderatsiyada", "EDITED": "Moderatsiyada", "PUBLISHED": "E'lon qilindi",
                      "DECLINED": "Uzum rad etdi"}
@@ -91,6 +93,10 @@ def customer_name(review: dict[str, Any]) -> str:
     return name
 
 
+def shop_of(review: dict[str, Any]) -> str:
+    return str(_dict(review.get("shop")).get("id") or "")
+
+
 def rating_of(review: dict[str, Any]) -> int:
     rating = review.get("rating")
     return rating if isinstance(rating, int) and not isinstance(rating, bool) and 1 <= rating <= 5 else 0
@@ -128,6 +134,26 @@ def settings_view(settings: ReviewSettings) -> dict[str, Any]:
             "empty_method": settings.empty_method, "backlog": settings.auto_reply and settings.since is None,
             "since": slot_label(settings.since), "last_run_at": slot_label(settings.last_run_at),
             "last_message": settings.last_message}
+
+
+def shops_view(shops: list[dict[str, str]], rules: dict[str, ReviewShopSettings]) -> list[dict[str, Any]]:
+    """A'zoning do'konlari va har biriga tanlangan usul ("default" — umumiy sozlama)."""
+    views = []
+    for shop in shops:
+        rule = rules.get(shop["id"])
+        text = (rule.text_method if rule else None) or "default"
+        empty = (rule.empty_method if rule else None) or "default"
+        views.append({"id": shop["id"], "name": shop["name"], "text_method": text, "empty_method": empty,
+                      "custom": text != "default" or empty != "default"})
+    return views
+
+
+def method_for(current: ReviewSettings, rules: dict[str, ReviewShopSettings], review: dict[str, Any]) -> str:
+    """Do'kon uchun alohida usul tanlangan bo'lsa o'sha, aks holda umumiy sozlama."""
+    rule = rules.get(shop_of(review))
+    if review_text(review):
+        return (rule.text_method if rule else None) or current.text_method
+    return (rule.empty_method if rule else None) or current.empty_method
 
 
 def reply_view(row: ReviewReply) -> dict[str, Any]:
@@ -177,14 +203,38 @@ async def templates_of(session: AsyncSession, user_id: UUID) -> list[ReviewTempl
                                       .order_by(ReviewTemplate.rating_max.desc(), ReviewTemplate.created_at)))
 
 
+async def shop_rules(session: AsyncSession, user_id: UUID) -> dict[str, ReviewShopSettings]:
+    return {rule.shop_id: rule for rule in await session.scalars(
+        select(ReviewShopSettings).where(ReviewShopSettings.user_id == user_id))}
+
+
 async def history(session: AsyncSession, user_id: UUID) -> list[dict[str, Any]]:
     rows = await session.scalars(select(ReviewReply).where(ReviewReply.user_id == user_id, ReviewReply.status != "draft")
                                  .order_by(ReviewReply.updated_at.desc()).limit(50))
     return [reply_view(row) for row in rows]
 
 
+async def update_shop_rules(session: AsyncSession, user_id: UUID, payload: ReviewSettingsRequest) -> None:
+    """Ro'yxatdagi do'konlar: "default" bo'lsa alohida sozlama o'chiriladi, aks holda saqlanadi."""
+    account = await uzum_accounts.find(session, user_id)
+    known = {shop["id"] for shop in account.shops_json} if account else set()
+    if any(item.shop_id not in known for item in payload.shops):
+        raise AppError("uzum_shop_invalid", "Tanlangan do'kon sizning Uzum do'konlaringiz orasida yo'q.", 422)
+    custom = [item for item in payload.shops if item.text_method != "default" or item.empty_method != "default"]
+    defaults = [item.shop_id for item in payload.shops if item.text_method == item.empty_method == "default"]
+    if defaults:
+        await session.execute(delete(ReviewShopSettings).where(
+            ReviewShopSettings.user_id == user_id, ReviewShopSettings.shop_id.in_(defaults)))
+    for item in custom:
+        values = {"text_method": None if item.text_method == "default" else item.text_method,
+                  "empty_method": None if item.empty_method == "default" else item.empty_method, "updated_at": utcnow()}
+        await session.execute(insert(ReviewShopSettings).values(user_id=user_id, shop_id=item.shop_id, **values)
+                              .on_conflict_do_update(index_elements=["user_id", "shop_id"], set_=values))
+
+
 async def update_settings(session: AsyncSession, user_id: UUID, payload: ReviewSettingsRequest) -> dict[str, Any]:
     current = await ensure_settings(session, user_id)
+    await update_shop_rules(session, user_id, payload)
     if payload.auto_reply:
         # Yoqilgan paytdan keyingi sharhlar; "eski sharhlar ham" tanlansa — chegara yo'q.
         current.since = None if payload.backlog else (current.since if current.auto_reply and current.since else utcnow())
@@ -424,6 +474,7 @@ async def _sync_moderation(db: Database, cabinet: uzum_cabinet.Cabinet, user_id:
 async def _run_user(db: Database, settings: Settings, user_id: UUID) -> str:
     async with db.transaction() as session:
         current = await session.get(ReviewSettings, user_id)
+        rules = await shop_rules(session, user_id)
     if not current or not current.auto_reply:
         return ""
     since_ms = int(current.since.timestamp() * 1000) if current.since else None
@@ -442,7 +493,7 @@ async def _run_user(db: Database, settings: Settings, user_id: UUID) -> str:
                 ReviewReply.user_id == user_id, ReviewReply.review_id.in_([item["reviewId"] for item in reviews])))}
         queue = []
         for review in reviews:
-            method = current.text_method if review_text(review) else current.empty_method
+            method = method_for(current, rules, review)
             if not eligible(rows.get(review["reviewId"])):
                 continue
             if method == "skip":
@@ -471,7 +522,7 @@ async def _run_user(db: Database, settings: Settings, user_id: UUID) -> str:
                 logger.warning("review_auto_reply_failed code=%s", error.code)
         await _sync_moderation(db, cabinet, user_id)
     parts = [f"{sent} ta javob yuborildi"] + ([f"{failed} tasida xato"] if failed else []) + (
-        [f"{skipped} ta matnsiz sharh o'tkazib yuborildi"] if skipped else [])
+        [f"{skipped} ta sharhga sozlama bo'yicha javob yozilmadi"] if skipped else [])
     return ", ".join(parts) + "."
 
 
