@@ -34,7 +34,7 @@
 </section>{% endif %}
 <section class="timeslot-panel" aria-labelledby="review-templates-title">
   <h2 id="review-templates-title">Shablonlar</h2>
-  <p class="connect-note"><i data-lucide="info"></i><span>O'rinbosarlar: <code>{ism}</code> — mijoz ismi (yashirgan bo'lsa «hurmatli xaridor»), <code>{mahsulot}</code> — mahsulot nomi, <code>{dokon}</code> — do'kon nomi. Bir reytingga bir nechta shablon bo'lsa, javoblar navbat bilan almashadi.</span></p>
+  <p class="connect-note"><i data-lucide="info"></i><span>O'rinbosarlar: <code>{ism}</code> — mijoz ismi (ismi bo'lmasa yoki yashirgan bo'lsa, murojaat ismsiz yoziladi), <code>{mahsulot}</code> — mahsulot nomi, <code>{dokon}</code> — do'kon nomi. Bir reytingga bir nechta shablon bo'lsa, javoblar navbat bilan almashadi.</span></p>
   <div class="review-templates">{% for item in review_templates %}{{ template_form(item) }}{% endfor %}</div>
   <details class="review-new-template"><summary><i data-lucide="plus"></i>Yangi shablon</summary>{{ template_form() }}</details>
 </section>

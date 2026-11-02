@@ -122,17 +122,20 @@ async def test_auto_reply_answers_new_reviews_once_in_their_language(database, a
     uzum.reviews[31] = review(31, 5, "Очень удобный", name="Ольга", created_ms=later())
     uzum.reviews[32] = review(32, 2, "", name="Aziz", created_ms=later())
     uzum.reviews[33] = review(33, 1, "Juda yomon, singan keldi", anonymous=True, created_ms=later())
+    # Uzum ismi yo'q mijozni «Безымянный» deb qaytaradi: javobda bunday "ism" bo'lmasligi kerak.
+    uzum.reviews[34] = review(34, 5, "", name="Безымянный", created_ms=later())
 
     assert await uzum_reviews.run_due(db, settings) == 1
     assert dict(uzum.replies) == {31: "Спасибо за отзыв! (тест)", 32: NEGATIVE_UZ.replace("{ism}", "Aziz"),
-                                  33: "Fikringiz uchun rahmat! (sinov)"}
+                                  33: "Fikringiz uchun rahmat! (sinov)",
+                                  34: uzum_reviews.DEFAULT_TEMPLATES[0][3].replace(", {ism}", "")}
     rows = await stored(db, account.id)
     assert {key: (row.method, row.source, row.language) for key, row in rows.items()} == {
-        31: ("ai", "auto", "ru"), 32: ("template", "auto", "uz"), 33: ("ai", "auto", "uz")}
-    assert await last_message(db, account.id) == "3 ta javob yuborildi."
+        31: ("ai", "auto", "ru"), 32: ("template", "auto", "uz"), 33: ("ai", "auto", "uz"), 34: ("template", "auto", "uz")}
+    assert await last_message(db, account.id) == "4 ta javob yuborildi."
 
     await uzum_reviews.run_due(db, settings)
-    assert len(uzum.replies) == 3
+    assert len(uzum.replies) == 4
     await configure(db, account.id, backlog=True)
     await uzum_reviews.run_due(db, settings)
     assert uzum.replies[-1][0] == 30
@@ -225,3 +228,19 @@ async def test_ai_reply_limit_and_public_text_checks(database, account, uzum):
 ])
 def test_review_language(text, language):
     assert uzum_reviews.review_language({"content": text}) == language
+
+
+@pytest.mark.parametrize(("text", "expected"), [
+    ("Assalomu alaykum, {ism}! Rahmat.", "Assalomu alaykum! Rahmat."),
+    ("Здравствуйте, {ism}! Спасибо за отзыв.", "Здравствуйте! Спасибо за отзыв."),
+    ("{ism}, rahmat!", "Rahmat!"),
+    ("Hurmatli {ism}, xaridingiz uchun rahmat!", "Xaridingiz uchun rahmat!"),
+    ("Уважаемая {ism}! Спасибо за отзыв.", "Спасибо за отзыв."),
+    ("Rahmat {ism}!", "Rahmat!"),
+])
+@pytest.mark.parametrize("customer", [{"customerName": "Безымянный"}, {"customerName": "***"}, {"customerName": ""},
+                                      {"customerName": "Ольга", "anonymous": True}])
+def test_nameless_customers_are_not_addressed(text, expected, customer):
+    template = ReviewTemplate(name="Sinov", rating_min=1, rating_max=5, text_uz=text, text_ru=text)
+    assert uzum_reviews.render(template, customer, "uz") == expected
+    assert uzum_reviews.render(template, {"customerName": "Ольга"}, "uz") == text.replace("{ism}", "Ольга")

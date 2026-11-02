@@ -41,7 +41,10 @@ LOGIN_ERRORS = {"uzum_login_invalid", "uzum_login_throttled", "uzum_login_failed
 PLACEHOLDER = re.compile(r"\{(ism|mahsulot|dokon)\}")
 ANY_PLACEHOLDER = re.compile(r"\{[^{}]*\}")
 UZ_CYRILLIC = set("ўқғҳЎҚҒҲ")
-NAME_FALLBACK = {"uz": "hurmatli xaridor", "ru": "уважаемый покупатель"}
+# Uzum ismi yo'q mijozni «Безымянный», anonimni «***» deb qaytaradi — bunday "ism" bilan murojaat qilinmaydi.
+NO_NAMES = {"безымянный", "безымянная", "без имени", "аноним", "anonim", "anonymous", "noma'lum"}
+# Ism bo'lmasa {ism} vergul va murojaat so'zi bilan birga olib tashlanadi: «Assalomu alaykum, {ism}!» → «Assalomu alaykum!».
+NO_NAME = re.compile(r"\s*,\s*\{ism\}|(?:\b(?:hurmatli|qadrli|уважаем\w*|дорог\w*)\s+)?\{ism\}\s*,?\s*", re.IGNORECASE)
 METHOD_LABELS = {"ai": "AI", "template": "Shablon", "manual": "Qo'lda"}
 STATUS_LABELS = {"draft": "Loyiha", "sending": "Yuborilmoqda", "sent": "Yuborildi", "failed": "Xato"}
 MODERATION_LABELS = {"CREATED": "Moderatsiyada", "EDITED": "Moderatsiyada", "PUBLISHED": "E'lon qilindi",
@@ -82,8 +85,10 @@ def review_language(review: dict[str, Any]) -> str:
 
 
 def customer_name(review: dict[str, Any]) -> str:
-    name = str(review.get("customerName") or "").strip()
-    return "" if review.get("anonymous") else " ".join(name.split())[:40]
+    name = " ".join(str(review.get("customerName") or "").split())[:40]
+    if review.get("anonymous") or name.casefold() in NO_NAMES or not any(char.isalpha() for char in name):
+        return ""
+    return name
 
 
 def rating_of(review: dict[str, Any]) -> int:
@@ -92,11 +97,15 @@ def rating_of(review: dict[str, Any]) -> int:
 
 
 def render(template: ReviewTemplate, review: dict[str, Any], language: str) -> str:
-    values = {"ism": customer_name(review) or NAME_FALLBACK[language],
+    values = {"ism": customer_name(review),
               "mahsulot": str(_dict(review.get("product")).get("productTitle") or "").strip()[:120],
               "dokon": str(_dict(review.get("shop")).get("title") or "").strip()[:80]}
     text = template.text_ru if language == "ru" else template.text_uz
-    return " ".join(PLACEHOLDER.sub(lambda match: values[match.group(1)], text).split())[:MAX_REPLY_CHARS]
+    if not values["ism"]:
+        text = NO_NAME.sub("", text)
+    text = " ".join(PLACEHOLDER.sub(lambda match: values[match.group(1)], text).split())
+    text = re.sub(r"\s+([!?.,])", r"\1", text).lstrip(" !?.,")
+    return (text[:1].upper() + text[1:])[:MAX_REPLY_CHARS]
 
 
 def pick_template(templates: list[ReviewTemplate], rating: int, review_id: int) -> ReviewTemplate | None:
