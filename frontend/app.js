@@ -6,14 +6,15 @@ import { initProfile } from './profile.js';
 import { initEditor } from './editor.js';
 import { initTimeslots } from './timeslots.js';
 import { initUzum } from './uzum.js';
+import { initReviews } from './reviews.js';
 
 window.htmx = htmx;
 htmx.config.allowEval = false;
 htmx.config.includeIndicatorStyles = false;
-const backgroundRequest = event => ['job-status', 'timeslot-watches'].includes(event.detail.elt?.id);
+const backgroundRequest = event => ['job-status', 'timeslot-watches', 'review-pending'].includes(event.detail.elt?.id);
 
 function start() {
-  icons(); initUpload(); initHistory(); bindHistoryActions(); initProfile(); initEditor(); initTimeslots(); initUzum();
+  icons(); initUpload(); initHistory(); bindHistoryActions(); initProfile(); initEditor(); initTimeslots(); initUzum(); initReviews();
   document.body.addEventListener('htmx:configRequest', event => {
     event.detail.headers['X-CSRF-Token'] = document.querySelector('meta[name="csrf-token"]').content;
   });

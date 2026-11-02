@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% macro template_form(item=None) %}
+<form class="review-template-form"{% if item %} data-template-id="{{ item.id }}"{% endif %}>
+  <div class="review-template-grid">
+    <label>Shablon nomi<input name="name" maxlength="80" required value="{{ item.name if item else '' }}"></label>
+    <label>Reytingdan<select name="rating_min">{% for star in range(1, 6) %}<option value="{{ star }}" {{ 'selected' if (item.rating_min if item else 4) == star else '' }}>{{ star }}★</option>{% endfor %}</select></label>
+    <label>Reytinggacha<select name="rating_max">{% for star in range(1, 6) %}<option value="{{ star }}" {{ 'selected' if (item.rating_max if item else 5) == star else '' }}>{{ star }}★</option>{% endfor %}</select></label>
+  </div>
+  <label>O'zbekcha javob<textarea name="text_uz" maxlength="500" required>{{ item.text_uz if item else '' }}</textarea></label>
+  <label>Ruscha javob<textarea name="text_ru" maxlength="500" required>{{ item.text_ru if item else '' }}</textarea></label>
+  <div class="dialog-actions">{% if item %}<button type="button" class="button secondary" data-delete-template><i data-lucide="trash-2"></i>O'chirish</button>{% endif %}<button type="submit" class="button primary"><i data-lucide="check"></i>{{ 'Saqlash' if item else "Qo'shish" }}</button></div>
+</form>
+{% endmacro %}
+{% block workspace_content %}
+<div class="page-heading"><div><div class="eyebrow">UZUM · SHARHLAR</div><h1>Sharhlarga javob</h1><p>Har bir sharhga AI yoki shablon orqali javob yozing. Avtomatik rejimda yangi sharhlar har {{ interval_label }}da tekshiriladi va javob o'zi yuboriladi.</p></div>{% if account.connected and review_settings.auto_reply %}<button type="button" class="button secondary" data-action="run-reviews"><i data-lucide="refresh-cw"></i>Hozir tekshirish</button>{% endif %}</div>
+{% if not account.connected %}<div class="notice danger" role="alert"><i data-lucide="plug"></i><span>{{ account.message or "Sharhlarga javob yozish uchun Uzum akkauntingizni (API tokeni va kabinet logini) ulang." }} <a href="/uzum/connect?next=/reviews">Uzum'ni ulash</a></span></div>{% endif %}
+<section class="timeslot-panel" aria-labelledby="review-settings-title">
+  <h2 id="review-settings-title">Avtomatik javob</h2>
+  <form id="review-settings-form" class="review-settings">
+    <label class="review-toggle"><input type="checkbox" name="auto_reply" {{ 'checked' if review_settings.auto_reply else '' }}><span><strong>Yangi sharhlarga javob o'zi yuborilsin</strong><small>Barcha reytingdagi sharhlarga, salbiylariga ham. Uzum javobni moderatsiyadan o'tkazadi.</small></span></label>
+    <div class="uzum-form-grid">
+      <label>Matnli sharhlarga<select name="text_method"><option value="ai" {{ 'selected' if review_settings.text_method == 'ai' else '' }}>AI — har biriga alohida javob</option><option value="template" {{ 'selected' if review_settings.text_method == 'template' else '' }}>Shablon</option></select></label>
+      <label>Matnsiz sharhlarga (faqat baho)<select name="empty_method"><option value="template" {{ 'selected' if review_settings.empty_method == 'template' else '' }}>Shablon</option><option value="ai" {{ 'selected' if review_settings.empty_method == 'ai' else '' }}>AI</option><option value="skip" {{ 'selected' if review_settings.empty_method == 'skip' else '' }}>Javob yozilmasin</option></select></label>
+    </div>
+    <label class="review-toggle"><input type="checkbox" name="backlog" {{ 'checked' if review_settings.backlog else '' }}><span><strong>Eski javobsiz sharhlarga ham javob yozilsin</strong><small>Belgilanmasa, faqat avtomatik rejim yoqilgandan keyingi sharhlarga javob yoziladi{% if review_settings.since %} ({{ review_settings.since }} dan){% endif %}.</small></span></label>
+    <p class="connect-note"><i data-lucide="info"></i><span>Javob sharh tilida yoziladi: ruscha sharhga ruscha, qolganlariga o'zbekcha. AI tanlansa, sharh matni (mijoz ismisiz) Google Gemini'ga yuboriladi; AI ishlamasa, javob mos shablondan olinadi.</span></p>
+    {% if review_settings.last_run_at %}<p class="watch-message">Oxirgi tekshiruv: {{ review_settings.last_run_at }}{% if review_settings.last_message %} — {{ review_settings.last_message }}{% endif %}</p>{% endif %}
+    <div class="dialog-actions"><button type="submit" class="button primary"><i data-lucide="check"></i>Saqlash</button></div>
+  </form>
+</section>
+{% if account.connected %}<section id="review-pending" class="timeslot-panel" aria-labelledby="review-pending-title" aria-busy="true" hx-get="/reviews/pending" hx-trigger="load" hx-swap="outerHTML">
+  <h2 id="review-pending-title">Javobsiz sharhlar</h2>
+  <p class="watch-message">Uzum kabinetidan yuklanmoqda…</p>
+</section>{% endif %}
+<section class="timeslot-panel" aria-labelledby="review-templates-title">
+  <h2 id="review-templates-title">Shablonlar</h2>
+  <p class="connect-note"><i data-lucide="info"></i><span>O'rinbosarlar: <code>{ism}</code> — mijoz ismi (yashirgan bo'lsa «hurmatli xaridor»), <code>{mahsulot}</code> — mahsulot nomi, <code>{dokon}</code> — do'kon nomi. Bir reytingga bir nechta shablon bo'lsa, javoblar navbat bilan almashadi.</span></p>
+  <div class="review-templates">{% for item in review_templates %}{{ template_form(item) }}{% endfor %}</div>
+  <details class="review-new-template"><summary><i data-lucide="plus"></i>Yangi shablon</summary>{{ template_form() }}</details>
+</section>
+<section class="timeslot-panel" aria-labelledby="review-history-title">
+  <h2 id="review-history-title">Yuborilgan javoblar</h2>
+  {% if replies %}<ul class="watch-list">{% for reply in replies %}
+    {% set badge = {'sent': 'ready', 'failed': 'failed', 'sending': 'queued'}[reply.status] %}
+    <li class="watch-item">
+      <div class="watch-heading"><h3>{{ reply.product or 'Mahsulot' }}</h3><span class="review-badges"><span class="badge {{ badge }}">{{ reply.status_label }}</span>{% if reply.moderation_label %}<span class="badge {{ 'failed' if reply.moderation == 'DECLINED' else 'ready' if reply.moderation == 'PUBLISHED' else 'queued' }}">{{ reply.moderation_label }}</span>{% endif %}</span></div>
+      {% if reply.text %}<p class="review-reply-text">{{ reply.text }}</p>{% endif %}
+      <p class="watch-message">{{ reply.rating }}★ · {{ reply.method_label }} · {{ 'Avtomatik' if reply.source == 'auto' else "Qo'lda" }} · {{ reply.sent_at or reply.updated_at }}{% if reply.error %} · {{ reply.error }}{% endif %}</p>
+    </li>{% endfor %}</ul>
+  {% else %}<div class="empty-state"><i data-lucide="message-square-reply"></i><h2>Hali javob yuborilmagan</h2></div>{% endif %}
+</section>
+{% endblock %}

@@ -240,6 +240,37 @@ class TimeslotWatchRequest(StrictModel):
     date_to: date
 
 
+class ReviewSettingsRequest(StrictModel):
+    auto_reply: bool
+    text_method: Literal["ai", "template"]
+    empty_method: Literal["ai", "template", "skip"]
+    # Avtomatik rejim yoqilganda eski javobsiz sharhlarga ham javob yozilsinmi.
+    backlog: bool = False
+
+
+class ReviewTemplateRequest(StrictModel):
+    name: str = Field(min_length=1, max_length=80)
+    rating_min: int = Field(ge=1, le=5)
+    rating_max: int = Field(ge=1, le=5)
+    text_uz: str = Field(min_length=2, max_length=500)
+    text_ru: str = Field(min_length=2, max_length=500)
+
+    @model_validator(mode="after")
+    def rating_range(self) -> Self:
+        if self.rating_min > self.rating_max:
+            raise ValueError("Reyting oralig'ini tekshiring")
+        return self
+
+
+class ReviewDraftRequest(StrictModel):
+    method: Literal["ai", "template"]
+    template_id: UUID | None = None
+
+
+class ReviewReplyRequest(StrictModel):
+    text: str = Field(min_length=2, max_length=500)
+
+
 class UzumConnectRequest(StrictModel):
     api_token: str = Field(min_length=10, max_length=512, pattern=r"^\S+$")
     login: str = Field(min_length=3, max_length=254)

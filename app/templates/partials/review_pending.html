@@ -1,0 +1,27 @@
+<section id="review-pending" class="timeslot-panel" aria-labelledby="review-pending-title">
+  <div class="watch-heading"><h2 id="review-pending-title">Javobsiz sharhlar</h2><button type="button" class="button secondary" hx-get="/reviews/pending?page={{ result.page }}" hx-target="#review-pending" hx-swap="outerHTML"><i data-lucide="refresh-cw"></i>Yangilash</button></div>
+  {% if error %}<div class="notice danger" role="alert"><i data-lucide="triangle-alert"></i><span>{{ error }}</span></div>
+  {% elif result.reviews %}
+  <ul class="review-list">{% for review in result.reviews %}{% set reply = review.reply %}
+    <li class="review-item">
+      <div class="watch-heading"><span class="review-stars" role="img" aria-label="{{ review.rating }} yulduz">{% for star in range(1, 6) %}<span class="{{ 'on' if star <= review.rating else '' }}">★</span>{% endfor %}</span><span class="review-date">{{ review.date }}</span></div>
+      <p class="review-product"><strong>{{ review.product }}</strong>{% if review.sku %} · {{ review.sku }}{% endif %}</p>
+      <p class="watch-message">{{ review.customer }}{% if review.shop %} · {{ review.shop }}{% endif %}{% if review.photos %} · {{ review.photos }} ta rasm{% endif %}</p>
+      {% if review.content %}<p class="review-text">{{ review.content }}</p>{% endif %}
+      {% if review.pros %}<p class="review-text"><b>Afzalliklari:</b> {{ review.pros }}</p>{% endif %}
+      {% if review.cons %}<p class="review-text"><b>Kamchiliklari:</b> {{ review.cons }}</p>{% endif %}
+      {% if not (review.content or review.pros or review.cons) %}<p class="watch-message">Matnsiz sharh — faqat baho qo'yilgan.</p>{% endif %}
+      {% if reply and reply.status == 'sent' %}<div class="notice success"><i data-lucide="circle-check"></i><span>Javob yuborildi: {{ reply.text }}</span></div>
+      {% else %}<form class="review-reply-form" data-review-id="{{ review.id }}">
+        <div class="review-tools">
+          <button type="button" class="button secondary" data-review-draft="ai"><i data-lucide="sparkles"></i>AI bilan yozish</button>
+          <select name="template_id" aria-label="Shablon"><option value="">Mos shablon ({{ review.rating }}★)</option>{% for item in result.templates %}<option value="{{ item.id }}">{{ item.name }} · {{ item.stars }}</option>{% endfor %}</select>
+          <button type="button" class="button secondary" data-review-draft="template"><i data-lucide="file-text"></i>Shablondan</button>
+        </div>
+        <textarea name="text" maxlength="{{ max_chars }}" minlength="2" required aria-label="Javob matni" placeholder="Javobni yozing yoki AI / shablonni tanlang">{{ reply.text if reply else '' }}</textarea>
+        <div class="review-actions"><small class="watch-message" data-review-note>{% if reply %}{{ reply.method_label }} · {{ reply.status_label }}{% if reply.error %} · {{ reply.error }}{% endif %}{% else %}Javob {{ 'ruscha' if review.language == 'ru' else "o'zbekcha" }} yoziladi{% endif %}</small><button type="submit" class="button primary"><i data-lucide="send"></i>Yuborish</button></div>
+      </form>{% endif %}
+    </li>{% endfor %}</ul>
+  {% else %}<div class="empty-state"><i data-lucide="circle-check"></i><h2>Javobsiz sharh yo'q</h2></div>{% endif %}
+  {% if result.page > 0 or result.has_more %}<nav class="pagination" aria-label="Sahifalar">{% if result.page > 0 %}<button type="button" class="icon-button" hx-get="/reviews/pending?page={{ result.page - 1 }}" hx-target="#review-pending" hx-swap="outerHTML" aria-label="Oldingi sahifa"><i data-lucide="chevron-left"></i></button>{% endif %}<span>{{ result.page + 1 }}-sahifa</span>{% if result.has_more %}<button type="button" class="icon-button" hx-get="/reviews/pending?page={{ result.page + 1 }}" hx-target="#review-pending" hx-swap="outerHTML" aria-label="Keyingi sahifa"><i data-lucide="chevron-right"></i></button>{% endif %}</nav>{% endif %}
+</section>

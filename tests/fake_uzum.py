@@ -22,6 +22,16 @@ def invoice(invoice_id: int, slot_ms: int | None, status: str = "CREATED", remai
             "timeSlotReservation": {"timeFrom": slot_ms, "timeTo": slot_ms + 2 * HOUR_MS} if slot_ms else None}
 
 
+def review(review_id: int, rating: int = 5, content: str = "", *, shop_id: int = 77, name: str = "Aziz",
+           created_ms: int = 0, anonymous: bool = False, pros: str = "", cons: str = "") -> dict[str, Any]:
+    return {"reviewId": review_id, "dateCreated": created_ms or 1_700_000_000_000 + review_id, "rating": rating,
+            "content": content, "pros": pros, "cons": cons, "photos": [], "customerName": name, "anonymous": anonymous,
+            "product": {"productId": 900 + review_id, "productTitle": f"Mahsulot {review_id}", "skuTitle": "Qora",
+                        "photos": []},
+            "replyStatus": None, "characteristics": [], "shop": {"id": shop_id, "title": "Shop", "rating": 4.9},
+            "read": False, "pinned": False, "reply": None}
+
+
 class FakeUzum:
     def __init__(self) -> None:
         # API tokeni -> do'konlar; "expired" Uzum'dagi "Token expired" javobini beradi.
@@ -34,6 +44,10 @@ class FakeUzum:
         self.slots: list[dict[str, Any]] = []
         self.set_errors: dict[int, httpx.Response] = {}
         self.characteristics: list[dict[str, Any]] = []
+        # Sharhlar: "reply" — sotuvchi javobi (None — javobsiz); reply_errors — reply/create javobi o'rniga.
+        self.reviews: dict[int, dict[str, Any]] = {}
+        self.replies: list[tuple[int, str]] = []
+        self.reply_errors: dict[int, httpx.Response] = {}
         self.openapi_down = False
         self.logins: list[str] = []
         self.calls: list[tuple[str, str, Any]] = []
@@ -64,6 +78,8 @@ class FakeUzum:
         user = next((login for login, token in self.tokens.items() if request.headers.get("authorization") == f"Bearer {token}"), None)
         if user is None:
             return httpx.Response(401, json={"errors": [{"code": "unauthorized-001", "message": "Unauthorized"}]})
+        if path.startswith("/api/seller/product-reviews"):
+            return self.review_api(user, request, path.removeprefix("/api/seller/product-reviews"), payload)
         match = re.fullmatch(r"/api/seller/shop/(\d+)(/.*)", path)
         if not match or match.group(1) not in self.shop_access.get(user, set()):
             return httpx.Response(403, json={"errors": [{"code": "forbidden-001", "message": "Forbidden"}]})
@@ -112,6 +128,33 @@ class FakeUzum:
             return httpx.Response(200, json={"payload": None})
         if method == "GET" and path == "/product/required-characteristics":
             return httpx.Response(200, json={"characteristics": self.characteristics})
+        return httpx.Response(404, json={"errors": [{"code": "not-found"}]})
+
+    def review_api(self, user: str, request: httpx.Request, path: str, payload: Any) -> httpx.Response:
+        own = {key: item for key, item in self.reviews.items() if str(item["shop"]["id"]) in self.shop_access.get(user, set())}
+        if request.method == "POST" and path == "":
+            replied = {"NO_REPLY": False, "WITH_REPLY": True}.get(payload.get("filter"))
+            items = sorted((item for item in own.values() if replied is None or bool(item["reply"]) == replied),
+                           key=lambda item: -item["dateCreated"])
+            page, size = int(request.url.params["page"]), int(request.url.params["size"])
+            listed = [{key: value for key, value in item.items() if key != "reply"} for item in items[page * size:(page + 1) * size]]
+            return httpx.Response(200, json={"payload": listed, "timestamp": "2026-11-02T00:00:00.000000Z"})
+        if request.method == "GET" and (found := re.fullmatch(r"/review/(\d+)", path)):
+            item = own.get(int(found.group(1)))
+            return httpx.Response(200, json=item) if item else httpx.Response(403, json={"errors": [{"code": "forbidden-001"}]})
+        if request.method == "POST" and path == "/reply/create":
+            for entry in payload:
+                item = own.get(entry["reviewId"])
+                if item is None:
+                    return httpx.Response(403, json={"errors": [{"code": "forbidden-001"}]})
+                if entry["reviewId"] in self.reply_errors:
+                    return self.reply_errors[entry["reviewId"]]
+                if item["reply"]:
+                    return httpx.Response(400, json={"errors": [{"code": "review-reply-exists"}]})
+                item["reply"] = {"replyId": 5000 + entry["reviewId"], "content": entry["content"], "status": "CREATED"}
+                item["replyStatus"] = "CREATED"
+                self.replies.append((entry["reviewId"], entry["content"]))
+            return httpx.Response(200, json={"payload": None})
         return httpx.Response(404, json={"errors": [{"code": "not-found"}]})
 
     def requests(self, suffix: str) -> list[tuple[str, str, Any]]:

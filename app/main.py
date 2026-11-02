@@ -14,8 +14,8 @@ from app.config import ROOT, Settings, get_settings
 from app.db import Database
 from app.errors import AppError
 from app.middleware import BodyLimitMiddleware, RateLimits, SecurityMiddleware
-from app.routes import auth, cards, pages, profile, timeslots, uzum
-from app.services import uzum_timeslots
+from app.routes import auth, cards, pages, profile, reviews, timeslots, uzum
+from app.services import uzum_reviews, uzum_timeslots
 from app.web import context, templates
 
 logger = logging.getLogger(__name__)
@@ -57,14 +57,16 @@ def create_app(settings: Settings | None = None, database: Database | None = Non
 
     @asynccontextmanager
     async def lifespan(application: FastAPI):
-        # Timeslot kuzatuvi web jarayonida: "Hozir tekshirish" uni shu jarayondagi hodisa orqali uyg'otadi.
-        watcher = None
+        # Timeslot kuzatuvi va sharhlarga avtomatik javob web jarayonida: "Hozir tekshirish" ularni shu jarayondagi hodisa orqali uyg'otadi.
+        loops = []
         if settings.uzum_timeslot_watch and settings.app_env != "test":
-            watcher = asyncio.create_task(uzum_timeslots.watch_loop(db, settings, application.state.timeslot_wake))
+            loops.append(asyncio.create_task(uzum_timeslots.watch_loop(db, settings, application.state.timeslot_wake)))
+        if settings.review_auto_reply and settings.app_env != "test":
+            loops.append(asyncio.create_task(uzum_reviews.reply_loop(db, settings, application.state.review_wake)))
         yield
-        if watcher:
-            watcher.cancel()
-            await asyncio.gather(watcher, return_exceptions=True)
+        for task in loops:
+            task.cancel()
+        await asyncio.gather(*loops, return_exceptions=True)
         if database is None:
             await db.close()
 
@@ -72,6 +74,7 @@ def create_app(settings: Settings | None = None, database: Database | None = Non
                   docs_url=None if settings.app_env == "production" else "/api/docs", redoc_url=None)
     app.state.settings, app.state.db, app.state.rates = settings, db, RateLimits()
     app.state.timeslot_wake = asyncio.Event()
+    app.state.review_wake = asyncio.Event()
     app.add_exception_handler(AppError, app_error)
     app.add_exception_handler(RequestValidationError, validation_error)
     app.add_exception_handler(HTTPException, http_error)
@@ -82,6 +85,7 @@ def create_app(settings: Settings | None = None, database: Database | None = Non
     app.include_router(auth.router)
     app.include_router(cards.router)
     app.include_router(timeslots.router)
+    app.include_router(reviews.router)
     app.include_router(uzum.router)
     app.include_router(profile.router)
     app.include_router(pages.router)

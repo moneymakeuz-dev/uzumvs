@@ -35,6 +35,7 @@ class DailyUsage(Base):
     day: Mapped[str] = mapped_column(String(10), primary_key=True)
     accepted_jobs: Mapped[int] = mapped_column(default=0)
     created_drafts: Mapped[int] = mapped_column(default=0)
+    reply_ai_calls: Mapped[int] = mapped_column(default=0, server_default="0")
 
 
 class DailyBudget(Base):

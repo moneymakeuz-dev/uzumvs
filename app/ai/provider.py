@@ -134,18 +134,22 @@ async def generate_gemini(api: Any, settings: Settings, parts: list,
                               usage.candidates_token_count if usage else None,
                               usage.thoughts_token_count if usage else None, getattr(response, "response_id", None))
     except errors.APIError as error:
-        retry_after = 1.0
-        response = getattr(error, "response", None)
-        if response is not None:
-            try:
-                retry_after = float(response.headers.get("Retry-After", "1"))
-            except (ValueError, AttributeError):
-                retry_after = 16
-        retryable = (error.code == 429 or (error.code or 0) >= 500) and retry_after <= 15
-        logger.warning("gemini_api_error status=%s code=%s retryable=%s", error.code, error.status, retryable)
-        raise ProviderFailure("provider_unavailable", retryable, called, retry_after) from None
+        raise api_failure(error, called) from None
     except (TimeoutError, OSError, httpx.HTTPError):
         raise ProviderFailure("provider_timeout", called=called) from None
+
+
+def api_failure(error: errors.APIError, called: bool) -> ProviderFailure:
+    retry_after = 1.0
+    response = getattr(error, "response", None)
+    if response is not None:
+        try:
+            retry_after = float(response.headers.get("Retry-After", "1"))
+        except (ValueError, AttributeError):
+            retry_after = 16
+    retryable = (error.code == 429 or (error.code or 0) >= 500) and retry_after <= 15
+    logger.warning("gemini_api_error status=%s code=%s retryable=%s", error.code, error.status, retryable)
+    return ProviderFailure("provider_unavailable", retryable, called, retry_after)
 
 
 def _thinking_config(model: str) -> types.ThinkingConfig | None:

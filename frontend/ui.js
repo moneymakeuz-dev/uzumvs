@@ -2,14 +2,16 @@ import { createIcons, Layers2, SquarePlus, LayoutGrid, Settings2, Sparkles, Arro
   LogOut, Menu, ChevronRight, ArrowRight, ArrowLeft, Eye, EyeOff, ImagePlus, Image,
   Trash2, GripVertical, Check, Copy, Download, RefreshCw, Search, ChevronLeft, ChevronDown,
   X, CircleCheck, LoaderCircle, TriangleAlert, Info, SlidersHorizontal, FileSpreadsheet,
-  Plus, Mail, LockKeyhole, ShieldCheck, MoreHorizontal, CheckCheck, Maximize2, CalendarClock, Plug } from 'lucide';
+  Plus, Mail, LockKeyhole, ShieldCheck, MoreHorizontal, CheckCheck, Maximize2, CalendarClock, Plug,
+  MessageSquareReply, Send, FileText } from 'lucide';
 
 export function icons() {
   createIcons({ icons: { Layers2, SquarePlus, LayoutGrid, Settings2, Sparkles, ArrowUpRight,
     LogOut, Menu, ChevronRight, ArrowRight, ArrowLeft, Eye, EyeOff, ImagePlus, Image,
     Trash2, GripVertical, Check, Copy, Download, RefreshCw, Search, ChevronLeft, ChevronDown,
     X, CircleCheck, LoaderCircle, TriangleAlert, Info, SlidersHorizontal, FileSpreadsheet,
-    Plus, Mail, LockKeyhole, ShieldCheck, MoreHorizontal, CheckCheck, Maximize2, CalendarClock, Plug }, attrs: { 'aria-hidden': 'true' } });
+    Plus, Mail, LockKeyhole, ShieldCheck, MoreHorizontal, CheckCheck, Maximize2, CalendarClock, Plug,
+    MessageSquareReply, Send, FileText }, attrs: { 'aria-hidden': 'true' } });
 }
 
 let toastTimer;

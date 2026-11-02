@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     uzum_timeslot_interval_seconds: int = Field(default=180, ge=60, le=3600)
     uzum_timeslot_min_lead_hours: int = Field(default=48, ge=24, le=336)
     uzum_timeslot_dry_run: bool = False
+    # Sharhlarga avtomatik javob: fon tekshiruvi web jarayonida, AI javoblar a'zo boshiga kunlik limit bilan.
+    review_auto_reply: bool = True
+    review_reply_interval_seconds: int = Field(default=600, ge=120, le=3600)
+    review_ai_daily_limit: int = Field(default=200, ge=1, le=5000)
     email_verification: bool = True
     initial_monthly_limit: int = Field(default=20, ge=1)
     regeneration_monthly_limit: int = Field(default=40, ge=1)

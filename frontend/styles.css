@@ -233,6 +233,36 @@ dialog p { margin: 16px 0 24px; color: var(--muted); font-size: 13px; }
 .connect-note svg { flex: none; width: 16px; height: 16px; color: var(--accent); }
 .uzum-account { display: grid; gap: 10px; justify-items: start; }
 .uzum-account p { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.review-settings, .review-template-form, .review-reply-form { display: grid; gap: 14px; }
+.review-settings { max-width: 760px; }
+.review-settings label, .review-template-form label { display: grid; gap: 6px; min-width: 0; font-size: 13px; }
+.review-settings .review-toggle { display: flex; gap: 10px; align-items: flex-start; }
+.review-toggle input { margin-top: 2px; }
+.review-toggle span { display: grid; gap: 3px; }
+.review-toggle small { color: var(--muted); font-size: 12px; }
+.connect-note code { padding: 1px 4px; border-radius: 3px; background: var(--surface); color: var(--ink); }
+.review-list { display: grid; gap: 14px; margin: 0; padding: 0; list-style: none; }
+.review-item { display: grid; gap: 8px; padding: 16px; border: 1px solid var(--line); border-radius: 6px; min-width: 0; }
+.review-stars { display: inline-flex; gap: 1px; color: #d4dbd7; font-size: 16px; letter-spacing: 1px; }
+.review-stars .on { color: var(--amber); }
+.review-date { color: var(--muted); font-size: 12px; }
+.review-product { font-size: 13px; overflow-wrap: anywhere; }
+.review-text, .review-reply-text { font-size: 13px; line-height: 1.7; white-space: pre-line; overflow-wrap: anywhere; }
+.review-reply-text { padding: 10px 12px; border-left: 3px solid var(--accent); background: var(--surface); }
+.review-reply-form { margin-top: 4px; padding-top: 12px; border-top: 1px solid var(--line); }
+.review-reply-form textarea { min-height: 90px; font-size: 13px; line-height: 1.6; }
+.review-tools { display: flex; flex-wrap: wrap; gap: 8px; }
+.review-tools select { flex: 1 1 200px; width: auto; font-size: 12px; }
+.review-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.review-badges { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.review-templates { display: grid; gap: 14px; }
+.review-template-form { padding: 16px; border: 1px solid var(--line); border-radius: 6px; }
+.review-template-form textarea { min-height: 72px; font-size: 13px; line-height: 1.6; }
+.review-template-grid { display: grid; grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr)); gap: 12px; }
+.review-new-template summary { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; color: var(--accent); font-weight: 600; font-size: 13px; }
+.review-new-template summary svg { width: 16px; height: 16px; }
+.review-new-template[open] summary { margin-bottom: 12px; }
+@media (max-width: 767px) { .review-template-grid { grid-template-columns: minmax(0, 1fr); } .review-template-form textarea { min-height: 120px; } .review-actions { flex-direction: column; align-items: stretch; } .review-tools .button { flex: 1; } }
 @media (max-width: 767px) { .timeslot-panel { padding: 16px; } .timeslot-invoice-row { flex-direction: column; } .watch-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .error-state { grid-column: 1 / -1; max-width: 620px; text-align: center; margin: auto; padding: 50px 10px; }
 .error-state h1 { font-size: 24px; margin: 18px 0 30px; }

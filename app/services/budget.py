@@ -4,6 +4,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai import replies
 from app.ai.provider import ProviderResult
 from app.clock import periods, utcnow
 from app.config import Settings
@@ -64,10 +65,8 @@ async def settle_call(session: AsyncSession, call_id: UUID, settings: Settings,
         raise RuntimeError("Missing provider cost reservation")
     cost = usage.reserved_cost if called else Decimal("0")
     usage.cost_basis = "upper_bound" if called else "not_called"
-    if result and result.input_tokens is not None and result.output_tokens is not None:
-        tokens = max(result.output_tokens, 0) + max(result.thinking_tokens or 0, 0)
-        cost = (max(result.input_tokens, 0) * settings.ai_input_price_per_million
-                + tokens * settings.ai_output_price_per_million) / Decimal("1000000")
+    if (reported := reported_cost(result, settings)) is not None:
+        cost = reported
         usage.input_tokens, usage.output_tokens = result.input_tokens, result.output_tokens
         usage.thinking_tokens, usage.provider_request_id = result.thinking_tokens, result.request_id
         usage.cost_basis = "reported"
@@ -78,6 +77,46 @@ async def settle_call(session: AsyncSession, call_id: UUID, settings: Settings,
     usage.estimated_cost = cost
     usage.outcome = "returned" if result else ("unknown" if called else "not_called")
     usage.budget_state, usage.finished_at = "settled", utcnow()
+
+
+def reported_cost(result: ProviderResult | None, settings: Settings) -> Decimal | None:
+    if not result or result.input_tokens is None or result.output_tokens is None:
+        return None
+    tokens = max(result.output_tokens, 0) + max(result.thinking_tokens or 0, 0)
+    return (max(result.input_tokens, 0) * settings.ai_input_price_per_million
+            + tokens * settings.ai_output_price_per_million) / Decimal("1000000")
+
+
+def reply_call_cost(settings: Settings) -> Decimal:
+    if settings.ai_provider == "mock":
+        return Decimal("0")
+    return ((replies.MAX_INPUT_TOKENS * settings.ai_input_price_per_million
+             + replies.MAX_OUTPUT_TOKENS * settings.ai_output_price_per_million)
+            / Decimal("1000000")).quantize(Decimal("0.00000001"))
+
+
+async def reserve_reply(session: AsyncSession, settings: Settings) -> str:
+    """Sharh javobi uchun AI chaqiruvi: kunlik budjetdan yuqori chegara bo'yicha zaxira; kunni qaytaradi."""
+    budget = await current_budget(session, settings)
+    cost = reply_call_cost(settings)
+    if settings.ai_provider != "mock" and budget.spent_usd + budget.reserved_usd + cost > budget.limit_usd:
+        raise AppError("budget_exhausted", "AI xizmatining bugungi budjeti tugagan.", 503, retry_after=3600)
+    budget.reserved_usd += cost
+    return budget.day
+
+
+async def settle_reply(session: AsyncSession, settings: Settings, day: str,
+                       result: ProviderResult | None, called: bool) -> None:
+    await advisory_lock(session, f"budget:{day}")
+    budget = await session.get(DailyBudget, day, with_for_update=True)
+    if budget is None:
+        return
+    reserved = reply_call_cost(settings)
+    cost = reported_cost(result, settings)
+    if cost is None:
+        cost = reserved if called else Decimal("0")
+    budget.reserved_usd -= reserved
+    budget.spent_usd += cost.quantize(Decimal("0.00000001"))
 
 
 async def settle_interrupted_calls(session: AsyncSession, job: GenerationJob, settings: Settings) -> None:

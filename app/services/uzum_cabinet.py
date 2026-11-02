@@ -16,6 +16,7 @@ OPENAPI = "https://api-seller.uzum.uz/api/seller-openapi"
 # Kabinet frontendidagi ochiq OAuth client (b2b-front:clientSecret) — har bir brauzerga yuboriladi, sir emas.
 CLIENT_AUTH = "Basic YjJiLWZyb250OmNsaWVudFNlY3JldA=="
 PAGE_SIZE = 20
+REVIEW_PAGE_SIZE = 20
 MAX_RELOGINS = 2
 # Testlar httpx.MockTransport qo'yadi.
 transport: httpx.AsyncBaseTransport | None = None
@@ -169,3 +170,33 @@ async def required_characteristics(cabinet: Cabinet, shop_id: str, category_id: 
         raise AppError("uzum_characteristics_unavailable", "Kategoriya majburiy xarakteristikalarini olib bo'lmadi.", 502)
     items = payload.get("characteristics")
     return [item for item in items if isinstance(item, dict)] if isinstance(items, list) else []
+
+
+async def list_reviews(cabinet: Cabinet, page: int, review_filter: str = "NO_REPLY") -> list[dict[str, Any]]:
+    """Kabinetdagi «Отзывы»: akkauntning barcha do'konlari sharhlari (NO_REPLY — javobsizlar)."""
+    response = await cabinet.call("POST", "/seller/product-reviews", params={"page": page, "size": REVIEW_PAGE_SIZE},
+                                  json={"filter": review_filter})
+    payload = body(response)
+    items = payload.get("payload") if isinstance(payload, dict) else None
+    if response.status_code != 200 or not isinstance(items, list):
+        raise AppError("uzum_reviews_unavailable", "Uzum kabinetidan sharhlarni olib bo'lmadi.", 502)
+    return [item for item in items if isinstance(item, dict)]
+
+
+async def get_review(cabinet: Cabinet, review_id: int) -> dict[str, Any]:
+    response = await cabinet.call("GET", f"/seller/product-reviews/review/{review_id}")
+    payload = body(response)
+    if response.status_code in {403, 404}:
+        raise AppError("review_not_found", "Sharh topilmadi yoki boshqa akkauntga tegishli.", 404)
+    if response.status_code != 200 or not isinstance(payload, dict) or payload.get("reviewId") != review_id:
+        raise AppError("uzum_reviews_unavailable", "Uzum kabinetidan sharhni olib bo'lmadi.", 502)
+    return payload
+
+
+async def create_reply(cabinet: Cabinet, review_id: int, text: str) -> None:
+    response = await cabinet.call("POST", "/seller/product-reviews/reply/create",
+                                  json=[{"reviewId": review_id, "content": text}])
+    if not response.is_success:
+        code = error_code(response)
+        detail = f"{response.status_code}" + (f" {code}" if code else "")
+        raise AppError("uzum_reply_failed", f"Uzum javobni qabul qilmadi ({detail}).", 502)

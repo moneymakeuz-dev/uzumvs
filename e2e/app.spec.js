@@ -190,7 +190,7 @@ test('layouts fit required widths', async ({ page }) => {
   await registerAndLogin(page);
   await createCard(page);
   const cardUrl = page.url();
-  for (const path of ['/cards/new', '/cards', '/profile', '/timeslots', '/uzum/connect', new URL(cardUrl).pathname]) {
+  for (const path of ['/cards/new', '/cards', '/profile', '/timeslots', '/reviews', '/uzum/connect', new URL(cardUrl).pathname]) {
     await page.goto(path);
     for (const width of [360, 390, 768, 1440]) {
       await page.setViewportSize({ width, height: 900 });
@@ -198,6 +198,7 @@ test('layouts fit required widths', async ({ page }) => {
       if (path === new URL(cardUrl).pathname) await screenshot(page, `card-${width}`);
       if (path === '/timeslots' && [390, 1440].includes(width)) await screenshot(page, `timeslots-${width}`);
       if (path === '/uzum/connect' && [390, 1440].includes(width)) await screenshot(page, `uzum-connect-${width}`);
+      if (path === '/reviews' && [390, 1440].includes(width)) await screenshot(page, `reviews-${width}`);
     }
   }
 });
