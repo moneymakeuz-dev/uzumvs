@@ -1,3 +1,4 @@
+import hashlib
 from typing import Any
 
 from fastapi import Request
@@ -11,6 +12,20 @@ from app.security import csrf_matches
 from app.services.auth import Identity
 
 templates = Jinja2Templates(directory=str(ROOT / "app" / "templates"))
+
+
+def asset_version() -> str:
+    """JS/CSS mazmuni xeshi: URL o'zgargani uchun CDN (Cloudflare) deploydan keyin eski faylni bermaydi."""
+    digest = hashlib.sha256()
+    for name in ("app.js", "app.css"):
+        try:
+            digest.update((ROOT / "app" / "static" / "dist" / name).read_bytes())
+        except OSError:
+            pass
+    return digest.hexdigest()[:12]
+
+
+templates.env.globals["asset_version"] = asset_version()
 
 
 def context(request: Request, **values: Any) -> dict[str, Any]:

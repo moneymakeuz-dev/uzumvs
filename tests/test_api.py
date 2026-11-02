@@ -1,5 +1,6 @@
 import io
 import json
+import re
 from contextlib import asynccontextmanager
 from html.parser import HTMLParser
 from uuid import UUID, uuid4
@@ -115,6 +116,9 @@ async def test_card_page_and_status_fragment(database, account):
         card_id = await upload(client, settings)
         page = await client.get(f"/cards/{card_id}")
         assert page.status_code == 200 and 'id="card-data"' in page.text
+        # Asset URL'lari mazmun xeshi bilan: deploydan keyin CDN eski JS/CSS'ni bermaydi.
+        assert re.search(r'src="/static/dist/app\.js\?v=[0-9a-f]{12}"', page.text)
+        assert re.search(r'href="/static/dist/app\.css\?v=[0-9a-f]{12}"', page.text)
         status = await client.get(f"/cards/{card_id}/status")
         assert "Kartochka yaratish" in status.text and "every 2s" not in status.text
         await client.post(f"/api/cards/{card_id}/generations", headers={"Idempotency-Key": "page-generate"},

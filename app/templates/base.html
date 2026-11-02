@@ -6,8 +6,8 @@
   <meta name="csrf-token" content="{{ csrf }}">
   <meta name="htmx-config" content='{"allowEval":false,"includeIndicatorStyles":false,"selfRequestsOnly":true}'>
   <title>{{ title|default('Karto Studio') }} | Karto</title>
-  <link rel="stylesheet" href="/static/dist/app.css">
-  <script src="/static/dist/app.js" defer></script>
+  <link rel="stylesheet" href="/static/dist/app.css?v={{ asset_version }}">
+  <script src="/static/dist/app.js?v={{ asset_version }}" defer></script>
 </head>
 <body data-ai-provider="{{ settings.ai_provider }}">
   <a class="skip-link" href="#main">Asosiy qismga o'tish</a>
